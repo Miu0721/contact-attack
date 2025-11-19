@@ -14,7 +14,10 @@
     "@playwright/test": "^1.56.1"
   },
   "dependencies": {
+    "@notionhq/client": "^5.4.0",
+    "dotenv": "^17.2.3",
     "googleapis": "^166.0.0",
+    "openai": "^6.9.1",
     "playwright": "^1.56.1",
     "playwright-core": "^1.56.1"
   }
