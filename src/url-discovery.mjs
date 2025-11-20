@@ -75,41 +75,86 @@ async function tryRuleBasedContactUrl(page, companyTopUrl) {
 }
 
 /** ①-2 AI に "問い合わせっぽいリンク" を選ばせる */
-async function tryAIContactUrl(page) {
+async function tryAIContactUrl(page, companyTopUrl) {
+  console.log('🤖 tryAIContactUrl START', { url: page.url(), companyTopUrl });
+
+  const currentUrl = page.url() || companyTopUrl;
+  let origin;
+  try {
+    origin = new URL(currentUrl).origin;
+  } catch {
+    try {
+      origin = new URL(companyTopUrl).origin;
+    } catch {
+      origin = null;
+    }
+    console.log('🔗 AI に渡すリンク数:', linksForAI.length);
+    console.log('🔗 サンプルリンク:', linksForAI.slice(0, 5));
+
+  }
+
   // ページ内の a タグ（リンク）を全部収集
-  const links = await page.$$eval('a', (as) =>
-    as
-      .map((a) => ({
-        href: a.getAttribute('href') || '',
-        text: (a.innerText || a.textContent || '').trim(),
-      }))
-      .filter((l) => l.href && l.text)
+  const rawLinks = await page.$$eval('a', (as) =>
+    as.map((a) => ({
+      href: a.getAttribute('href') || '',
+      text: (a.innerText || a.textContent || '').trim(),
+    })),
   );
+
+  // フィルタリング:
+  // - href が存在するものだけ
+  // - mailto:, tel:, javascript: は除外
+  // - 外部ドメインは基本除外（origin が取れないときはスキップ）
+  const links = rawLinks
+    .filter((l) => !!l.href)
+    .filter((l) => {
+      const href = l.href.trim();
+      if (!href || href === '#' || href.startsWith('#')) return false;
+      if (href.startsWith('mailto:')) return false;
+      if (href.startsWith('tel:')) return false;
+      if (href.toLowerCase().startsWith('javascript:')) return false;
+
+      if (!origin) return true;
+
+      try {
+        const u = new URL(href, origin);
+        // 外部ドメインは除外
+        return u.origin === origin;
+      } catch {
+        return false;
+      }
+    });
 
   if (!links.length) {
     console.warn('リンクが1件も見つかりませんでした');
     return null;
   }
 
-  console.log('🔗 AI判定用リンク候補数:', links.length);
+  console.log('🔗 AI判定用リンク候補数(フィルタ後):', links.length);
 
-  const linksForAI = links.slice(0, 50); // 多すぎるとAIが困るので50まで
+  // 多すぎるとAIが大変なので50件まで
+  const linksForAI = links.slice(0, 50);
 
-  // AI用プロンプト
+  // AI用プロンプト（NGワードも明示）
   const prompt = `
 あなたは「問い合わせページのリンク」を選ぶ分類器です。
 以下のJSON配列（リンク一覧）から、
-問い合わせ / Contact / Inquiry / Support / お問い合わせ
-などに該当しそうなリンクを1つ選んでください。
+B2B 企業向けの「問い合わせ / Contact / お問い合わせ / Inquiry / Support / 資料請求」などに該当しそうなリンクを1つ選んでください。
 
-返す形式は必ず以下だけ：
+選び方のルール:
+- 一般的な問い合わせフォーム/コンタクトフォームを最優先で選ぶ
+- 採用/キャリア/求人 (例: "採用", "recruit", "career", "jobs") は絶対に選ばない
+- プライバシーポリシー/利用規約/個人情報保護 (例: "privacy", "policy", "terms", "利用規約", "プライバシー") は選ばない
+- お知らせ/ニュース/ブログ/IR (例: "news", "お知らせ", "ブログ", "press", "ir") は選ばない
+- SNS (例: "twitter", "x.com", "facebook", "instagram", "line") は選ばない
 
+返す形式は必ず **次のJSONだけ**：
 { "index": 数値 }
 
-index は 0 〜 配列の長さ-1 の範囲。
-該当が無ければ { "index": -1 } を返す。
+- index は 0 〜 配列の長さ-1 の範囲の整数
+- もし適切な問い合わせリンクが本当に無い場合は { "index": -1 } を返してください
 
-リンク一覧:
+リンク一覧（index は配列のインデックスです）:
 ${JSON.stringify(linksForAI, null, 2)}
 `.trim();
 
@@ -118,21 +163,46 @@ ${JSON.stringify(linksForAI, null, 2)}
     input: prompt,
     max_output_tokens: 100,
   });
+  console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
+
 
   // AIからの生テキスト抽出
+  // --- ここからレスポンス抽出ロジックを書き換え ---
   let raw = '';
+
   try {
-    if (response.output_text) {
+    // 1. output_text があればそれを優先（ラッパーで用意している場合）
+    if (typeof response.output_text === 'string') {
       raw = response.output_text;
-    } else if (response.output?.length > 0) {
-      raw = response.output[0]?.content?.[0]?.text?.value || '';
+    } else if (Array.isArray(response.output) && response.output.length > 0) {
+      const first = response.output[0];
+
+      if (Array.isArray(first.content) && first.content.length > 0) {
+        const c = first.content[0];
+
+        // パターン1: { text: "..." }
+        if (typeof c.text === 'string') {
+          raw = c.text;
+        }
+        // パターン2: { text: { value: "..." } }
+        else if (c.text && typeof c.text.value === 'string') {
+          raw = c.text.value;
+        }
+        // 念のため fallback
+        else if (typeof c === 'string') {
+          raw = c;
+        }
+      }
     }
   } catch (e) {
-    console.warn('AI レスポンス抽出失敗:', e.message);
+    console.warn('AI レスポンス抽出失敗:', e);
   }
 
   raw = (raw || '').trim();
   console.log('🧠 Contact-link AI raw response:', raw);
+
+  if (!raw) return null;
+
 
   if (!raw) return null;
 
@@ -143,18 +213,25 @@ ${JSON.stringify(linksForAI, null, 2)}
   let parsed;
   try {
     parsed = JSON.parse(jsonStr);
-  } catch {
-    console.warn('AI JSON parse失敗:', jsonStr);
+  } catch (e) {
+    console.warn('AI JSON parse失敗:', jsonStr, e.message);
     return null;
   }
 
+  if (typeof parsed.index !== 'number') return null;
   if (parsed.index === -1) return null;
   if (parsed.index < 0 || parsed.index >= linksForAI.length) return null;
 
   const chosen = linksForAI[parsed.index];
   console.log('✅ AIが選んだリンク:', chosen);
 
-  return chosen.href;
+  // 相対パスに対応
+  try {
+    return new URL(chosen.href, companyTopUrl).toString();
+  } catch (e) {
+    console.warn('選ばれた href を URL に変換できませんでした:', chosen.href, e.message);
+    return null;
+  }
 }
 
 /** ① メイン：問い合わせページURLを返す */
@@ -167,12 +244,14 @@ export async function findContactPageUrl(page, companyTopUrl) {
   const ruleUrl = await tryRuleBasedContactUrl(page, companyTopUrl);
   if (ruleUrl) return ruleUrl;
 
-  // ①-2 AI 判定
+  // ①-2 AI 判定（TOPをもう一度開いておく）
   await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
 
-  const aiHref = await tryAIContactUrl(page);
-  if (!aiHref) return null;
+  const aiUrl = await tryAIContactUrl(page, companyTopUrl);
+  if (!aiUrl) {
+    console.log('⚠️ AIでも問い合わせページを特定できなかったため null を返します');
+    return null;
+  }
 
-  // 相対パスなら変換
-  return new URL(aiHref, companyTopUrl).toString();
+  return aiUrl;
 }
