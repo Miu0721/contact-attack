@@ -8,7 +8,10 @@ import { fillContactForm } from './contact-form-filler.mjs';
 import { SENDER_INFO, FIXED_MESSAGE } from './config/sender.mjs';
 
 // Sender 情報を Google スプレッドシートから読む
-import { loadSenderFromSheet } from './config/sender-from-sheet.mjs';
+import {
+  loadSenderFromSheet,
+  appendFormQuestionsAndAnswers,
+} from './config/sender-from-sheet.mjs';
 
 import {
   fetchContacts,
@@ -145,7 +148,25 @@ import { notifySlack } from './lib/slack.mjs';
         console.log('🧾 form schema:', JSON.stringify(formSchema, null, 2));
 
         // 3. フォーム自動入力（送信ボタンは押さない実装）
-        await fillContactForm(page, formSchema, senderInfo, fixedMessage);
+        const filledSummary =
+          (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) ||
+          [];
+
+        // 3.5 入力した質問項目と内容を FormLogs に出力
+        try {
+          await appendFormQuestionsAndAnswers({
+            contact,
+            contactUrl,
+            siteUrl: contact.siteUrl,
+            filledSummary,
+            formSchema,
+          });
+        } catch (logErr) {
+          console.warn(
+            '⚠️ フォーム質問ログの書き込みに失敗:',
+            logErr?.message || logErr
+          );
+        }
 
         lastResult = 'filled';
         status = 'Success'; // 「入力成功」で Success 扱い

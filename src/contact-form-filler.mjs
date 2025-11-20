@@ -15,11 +15,14 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
     return;
   }
 
+  const filledSummary = [];
+
   for (const f of formSchema.fields) {
     const role = f.role;
     const nameAttr = f.nameAttr || '';
     const idAttr = f.idAttr || '';
     const type = (f.type || 'text').toLowerCase();
+    const label = f.label || '';
 
     if (!role) continue;
 
@@ -60,6 +63,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
         try {
           await page.check(sel, { force: true });
           console.log(`☑️ Checked checkbox for role="${role}" via ${sel}`);
+          filledSummary.push({
+            role,
+            type,
+            selector: sel,
+            label,
+            nameAttr,
+            idAttr,
+            value: 'checked',
+          });
           clicked = true;
           break;
         } catch (e) {
@@ -150,6 +162,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
               console.log(
                 `🔘 Checked radio(index=${index}) for role="${role}" via ${sel}`
               );
+              filledSummary.push({
+                role,
+                type,
+                selector: sel,
+                label,
+                nameAttr,
+                idAttr,
+                value: matchedValue,
+              });
               filled = true;
               break;
             }
@@ -180,6 +201,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
             console.log(
               `🔘 Checked radio(value="${matchedValue}") for role="${role}" via ${sel}`
             );
+            filledSummary.push({
+              role,
+              type,
+              selector: sel,
+              label,
+              nameAttr,
+              idAttr,
+              value: matchedValue,
+            });
             filled = true;
             break;
           }
@@ -226,6 +256,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
           if (matchedValue) {
             await page.selectOption(sel, matchedValue);
             console.log(`🔽 Selected "${value}" for role="${role}" via ${sel}`);
+            filledSummary.push({
+              role,
+              type,
+              selector: sel,
+              label,
+              nameAttr,
+              idAttr,
+              value: matchedValue || value,
+            });
             filled = true;
             break;
           }
@@ -249,6 +288,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
             console.log(
               `🔽 Fallback select (first non-placeholder) for role="${role}" via ${sel}`
             );
+            filledSummary.push({
+              role,
+              type,
+              selector: sel,
+              label,
+              nameAttr,
+              idAttr,
+              value: fallbackValue,
+            });
             filled = true;
             break;
           }
@@ -275,6 +323,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
 
         await page.fill(sel, value);
         console.log(`✏️ Filled role="${role}" into ${sel}`);
+        filledSummary.push({
+          role,
+          type,
+          selector: sel,
+          label,
+          nameAttr,
+          idAttr,
+          value,
+        });
         filled = true;
         break;
       } catch (e) {
@@ -297,4 +354,6 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
   // } else {
   //   console.warn('送信ボタンが見つかりませんでした');
   // }
+
+  return filledSummary;
 }

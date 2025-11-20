@@ -9,8 +9,11 @@ const SPREADSHEET_ID =
 
 // Sender 用のタブ名（シート名）
 const SENDER_SHEET_NAME = 'Sender';
+const FORM_LOG_SHEET_NAME =
+  process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
 
 let sheetsClient = null;
+let formLogSheetChecked = false;
 
 /**
  * Google Sheets クライアントを作成（Contacts と同じ認証方式）
@@ -21,12 +24,53 @@ async function getSheets() {
   const auth = new google.auth.GoogleAuth({
     // ★ contactsRepo.mjs と同じ
     keyFile: 'service-account.json',
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
   const authClient = await auth.getClient();
   sheetsClient = google.sheets({ version: 'v4', auth: authClient });
   return sheetsClient;
+}
+
+/**
+ * FormLogs シートが存在しなければ作成する
+ */
+async function ensureFormLogSheetExists() {
+  if (formLogSheetChecked) return;
+  if (!SPREADSHEET_ID) return;
+
+  const sheets = await getSheets();
+
+  try {
+    const res = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const exists = res.data.sheets?.some(
+      (s) => s.properties?.title === FORM_LOG_SHEET_NAME
+    );
+
+    if (!exists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: FORM_LOG_SHEET_NAME,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+  } catch (_err) {
+    // ここでの失敗は append 側でリトライ・ログする
+  } finally {
+    formLogSheetChecked = true;
+  }
 }
 
 /**
@@ -79,4 +123,76 @@ export async function loadSenderFromSheet() {
     fixedMessage,
     companyTopUrl,
   };
+}
+
+/**
+ * フォームの質問項目と入力値を FormLogs シートに追記する
+ *
+ * @param {Object} params
+ * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
+ * @param {string} params.contactUrl - 実際にアクセスした問い合わせURL
+ * @param {string} params.siteUrl - 企業サイトのURL
+ * @param {Array} params.filledSummary - fillContactForm が返す入力サマリ
+ * @param {Object} params.formSchema - analyzeContactFormWithAI の返り値
+ */
+export async function appendFormQuestionsAndAnswers(params = {}) {
+  if (!SPREADSHEET_ID) {
+    console.warn(
+      'SENDER_SHEET_ID / SHEET_ID が未設定のため、フォームログ出力はスキップします'
+    );
+    return;
+  }
+
+  const {
+    contact,
+    contactUrl,
+    siteUrl,
+    filledSummary,
+    formSchema,
+  } = params;
+
+  const entries =
+    (filledSummary && filledSummary.length > 0
+      ? filledSummary
+      : (formSchema?.fields || []).map((f) => ({ ...f, value: '' }))) || [];
+
+  if (!entries.length) {
+    console.warn('appendFormQuestionsAndAnswers: ログ対象の項目がありません');
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const rows = entries.map((item) => [
+    timestamp,
+    contact?.companyName || '',
+    contact?.rowIndex || '',
+    siteUrl || contact?.siteUrl || '',
+    contactUrl || contact?.contactUrl || '',
+    item.role || '',
+    item.label || '',
+    item.type || '',
+    item.nameAttr || '',
+    item.idAttr || '',
+    item.selector || '',
+    item.value != null ? String(item.value) : '',
+  ]);
+
+  try {
+    await ensureFormLogSheetExists();
+
+    const sheets = await getSheets();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FORM_LOG_SHEET_NAME}!A:L`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: rows,
+      },
+    });
+  } catch (err) {
+    console.warn(
+      `appendFormQuestionsAndAnswers: シート "${FORM_LOG_SHEET_NAME}" への書き込みに失敗`,
+      err.message || err
+    );
+  }
 }
