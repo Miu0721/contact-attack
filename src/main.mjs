@@ -4,7 +4,10 @@ import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
 import { fillContactForm } from './contact-form-filler.mjs';
 import { SENDER_INFO, FIXED_MESSAGE, COMPANY_TOP_URL } from './config/sender.mjs';
 import { notifySlack } from './lib/slack.mjs';
-import { loadSenderFromSheet } from './config/sender-from-sheet.mjs';
+import {
+  loadSenderFromSheet,
+  appendFormQuestionsAndAnswers,
+} from './config/sender-from-sheet.mjs';
 
 
 const companyTopUrl =
@@ -63,7 +66,22 @@ const companyTopUrl =
     console.log('🧾 推定フォームスキーマ:');
     console.log(JSON.stringify(formSchema, null, 2));
 
-    await fillContactForm(page, formSchema, senderInfo, fixedMessage);
+    const filledSummary =
+      (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) || [];
+
+    try {
+      await appendFormQuestionsAndAnswers({
+        contactUrl,
+        siteUrl: companyTopUrl,
+        filledSummary,
+        formSchema,
+      });
+    } catch (logErr) {
+      console.warn(
+        '⚠️ フォーム質問ログの書き込みに失敗:',
+        logErr?.message || logErr
+      );
+    }
 
     console.log('✅ フォームへの自動入力が完了しました（送信はまだしていません）');
   } catch (err) {
