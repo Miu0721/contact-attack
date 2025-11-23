@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { findContactPageUrl } from './url-discovery.mjs';
+import { findContactPageCandidates } from './url-discovery.mjs';
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
 import { fillContactForm } from './contact-form-filler.mjs';
 import { SENDER_INFO, FIXED_MESSAGE, COMPANY_TOP_URL } from './config/sender.mjs';
@@ -36,54 +36,93 @@ const companyTopUrl =
     COMPANY_TOP_URL ||
     process.env.COMPANY_TOP_URL ||
     'https://nexx-inc.jp/index.html';
+    const contactPrompt = senderFromSheet?.contactPrompt || '';
 
 
     browser = await chromium.launch({ headless: false });
     const page = await browser.newPage();
 
-    console.log('🏁 企業TOPへアクセス:', companyTopUrl);
-    const contactUrl = await findContactPageUrl(page, companyTopUrl);
+    const candidates = await findContactPageCandidates(page, companyTopUrl, contactPrompt);
 
-    if (!contactUrl) {
+    if (!candidates.length) {
       const msg = `❌ 問い合わせページURLが見つかりませんでした: ${companyTopUrl}`;
       console.error(msg);
       await notifySlack(`[contact-attack-bot] ${msg}`);
       return;
     }
 
-    console.log('📨  問い合わせページにアクセスします:', contactUrl);
-    await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
+    let success = false;
+    for (const contactUrl of candidates) {
+      console.log('📨  問い合わせページ候補にアクセスします:', contactUrl);
+      try {
+        await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
+      } catch (navErr) {
+        console.warn('⚠️ ページ遷移に失敗:', navErr?.message || navErr);
+        continue;
+      }
 
-    const formSchema = await analyzeContactFormWithAI(page);
+      const formSchema = await analyzeContactFormWithAI(page);
 
-    if (!formSchema) {
-      const msg = `❌ フォーム構造解析に失敗しました: ${contactUrl}`;
+      if (!formSchema) {
+        console.warn(`❌ フォーム構造解析に失敗しました: ${contactUrl} (次の候補へ)`);
+        continue;
+      }
+
+      console.log('🧾 推定フォームスキーマ:');
+      console.log(JSON.stringify(formSchema, null, 2));
+
+      const filledSummary =
+        (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) || [];
+
+      const captchaEntry = filledSummary.find((f) => f.role === 'captcha');
+      if (captchaEntry) {
+        console.warn('🛡️ reCAPTCHA/anti-bot を検出したためフォーム入力を中断します');
+        try {
+          await appendFormQuestionsAndAnswers({
+            contactUrl,
+            siteUrl: companyTopUrl,
+            filledSummary,
+            formSchema,
+          });
+        } catch (logErr) {
+          console.warn(
+            '⚠️ フォーム質問ログの書き込みに失敗:',
+            logErr?.message || logErr
+          );
+        }
+        success = true;
+        break;
+      }
+
+      if (!filledSummary.length) {
+        console.warn('⚠️ 入力サマリが空でした (次の候補へ)');
+        continue;
+      }
+
+      try {
+        await appendFormQuestionsAndAnswers({
+          contactUrl,
+          siteUrl: companyTopUrl,
+          filledSummary,
+          formSchema,
+        });
+      } catch (logErr) {
+        console.warn(
+          '⚠️ フォーム質問ログの書き込みに失敗:',
+          logErr?.message || logErr
+        );
+      }
+
+      console.log('✅ フォームへの自動入力が完了しました（送信はまだしていません）');
+      success = true;
+      break;
+    }
+
+    if (!success) {
+      const msg = `❌ 全候補を試しましたがフォーム入力に失敗しました: ${companyTopUrl}`;
       console.error(msg);
       await notifySlack(`[contact-attack-bot] ${msg}`);
-      return;
     }
-
-    console.log('🧾 推定フォームスキーマ:');
-    console.log(JSON.stringify(formSchema, null, 2));
-
-    const filledSummary =
-      (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) || [];
-
-    try {
-      await appendFormQuestionsAndAnswers({
-        contactUrl,
-        siteUrl: companyTopUrl,
-        filledSummary,
-        formSchema,
-      });
-    } catch (logErr) {
-      console.warn(
-        '⚠️ フォーム質問ログの書き込みに失敗:',
-        logErr?.message || logErr
-      );
-    }
-
-    console.log('✅ フォームへの自動入力が完了しました（送信はまだしていません）');
   } catch (err) {
     console.error('🔴 致命的エラー:', err);
     await notifySlack(

@@ -117,11 +117,13 @@ export async function loadSenderFromSheet() {
 
   const fixedMessage = map.fixed_message || '';
   const companyTopUrl = map.default_company_top_url || '';
+  const contactPrompt = map.contact_prompt || '';
 
   return {
     senderInfo,
     fixedMessage,
     companyTopUrl,
+    contactPrompt,
   };
 }
 

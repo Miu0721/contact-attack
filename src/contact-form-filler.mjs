@@ -17,6 +17,35 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
 
   const filledSummary = [];
 
+  // reCAPTCHA など「私はロボットではありません」を検出してログに残す
+  const recaptchaSelectors = [
+    'iframe[src*="google.com/recaptcha"]',
+    'div.g-recaptcha',
+    'div.recaptcha',
+    'input[aria-label*="not a robot" i]',
+    'input[aria-label*="ロボットではありません"]',
+  ];
+  let recaptchaFound = '';
+  for (const sel of recaptchaSelectors) {
+    const handle = await page.$(sel);
+    if (handle) {
+      recaptchaFound = sel;
+      break;
+    }
+  }
+  if (recaptchaFound) {
+    filledSummary.push({
+      role: 'captcha',
+      type: 'recaptcha',
+      selector: recaptchaFound,
+      label: 'reCAPTCHA detected',
+      nameAttr: '',
+      idAttr: '',
+      value: 'manual_action_required',
+    });
+    console.log('🛡️ reCAPTCHA/anti-bot 要素を検出:', recaptchaFound);
+  }
+
   for (const f of formSchema.fields) {
     const role = f.role;
     const nameAttr = f.nameAttr || '';
