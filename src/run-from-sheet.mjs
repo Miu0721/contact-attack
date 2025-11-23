@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 // URL探索ロジックは現在無効化中
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
-import { fillContactForm } from './contact-form-filler.mjs';
+import { fillContactForm /*, confirmAndSubmit */ } from './contact-form-filler.mjs';
 
 // デフォルト値（シートが読めないとき用）
 import { SENDER_INFO, FIXED_MESSAGE } from './config/sender.mjs';
@@ -239,6 +239,8 @@ async function acceptCookieConsent(page) {
 
         lastResult = 'filled';
         status = 'Success';
+
+        // 送信は安全のため現在無効化
         break;
       }
 
