@@ -46,6 +46,77 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
     console.log('🛡️ reCAPTCHA/anti-bot 要素を検出:', recaptchaFound);
   }
 
+  // 画像認証・キャプチャ入力欄らしきものを検出（値は入れずにログのみ）
+  try {
+    const imageCaptchas =
+      (await page.$$eval('input, textarea', (elems) => {
+        const keywords = [
+          'captcha',
+          '認証コード',
+          '確認コード',
+          'セキュリティコード',
+          '画像認証',
+          '画像の文字',
+          '画像に表示',
+        ];
+        const results = [];
+
+        for (const el of elems) {
+          const tag = el.tagName?.toLowerCase() || '';
+          const nameAttr = el.getAttribute('name') || '';
+          const idAttr = el.id || '';
+          const placeholder = el.getAttribute('placeholder') || '';
+          const aria = el.getAttribute('aria-label') || '';
+          const labelText = (() => {
+            if (idAttr) {
+              const lbl = document.querySelector(`label[for="${idAttr}"]`);
+              if (lbl) return lbl.innerText.trim();
+            }
+            const parentLabel = el.closest('label');
+            if (parentLabel) return parentLabel.innerText.trim();
+            return '';
+          })();
+
+          const combined = (
+            `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`
+          ).toLowerCase();
+
+          if (keywords.some((k) => combined.includes(k.toLowerCase()))) {
+            const selector = idAttr
+              ? `#${idAttr}`
+              : nameAttr
+                ? `${tag}[name="${nameAttr}"]`
+                : tag || 'input';
+
+            results.push({
+              selector,
+              label: labelText || placeholder || aria || '',
+              nameAttr,
+              idAttr,
+              type: tag || 'input',
+            });
+          }
+        }
+
+        return results;
+      })) || [];
+
+    for (const info of imageCaptchas) {
+      filledSummary.push({
+        role: 'captcha',
+        type: 'image_captcha',
+        selector: info.selector,
+        label: info.label,
+        nameAttr: info.nameAttr,
+        idAttr: info.idAttr,
+        value: 'manual_action_required',
+      });
+      console.log('🛡️ 画像認証/キャプチャ入力欄を検出:', info.selector);
+    }
+  } catch (_e) {
+    // ignore detection errors
+  }
+
   for (const f of formSchema.fields) {
     const role = f.role;
     const nameAttr = f.nameAttr || '';
