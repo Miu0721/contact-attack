@@ -2,10 +2,8 @@
 import { google } from 'googleapis';
 import 'dotenv/config';
 
-// Contacts と同じスプレッドシートIDを使う。
-// もし Sender 用に別シートを使いたい場合は SENDER_SHEET_ID を .env に追加。
-const SPREADSHEET_ID =
-  process.env.SENDER_SHEET_ID || process.env.SHEET_ID;
+// Contacts と同じスプレッドシートIDを使う（1枚のシート運用に統一）
+const SPREADSHEET_ID = process.env.SHEET_ID;
 
 // Sender 用のタブ名（シート名）
 const SENDER_SHEET_NAME = 'Sender';
@@ -80,7 +78,7 @@ async function ensureFormLogSheetExists() {
 export async function loadSenderFromSheet() {
   if (!SPREADSHEET_ID) {
     console.warn(
-      'SENDER_SHEET_ID / SHEET_ID が設定されていないので、Sender シート読み込みをスキップします'
+      'SHEET_ID が設定されていないので、Sender シート読み込みをスキップします'
     );
     return null;
   }
@@ -140,7 +138,7 @@ export async function loadSenderFromSheet() {
 export async function appendFormQuestionsAndAnswers(params = {}) {
   if (!SPREADSHEET_ID) {
     console.warn(
-      'SENDER_SHEET_ID / SHEET_ID が未設定のため、フォームログ出力はスキップします'
+      'SHEET_ID が未設定のため、フォームログ出力はスキップします'
     );
     return;
   }
