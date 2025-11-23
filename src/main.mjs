@@ -9,37 +9,6 @@ import {
   appendFormQuestionsAndAnswers,
 } from './config/sender-from-sheet.mjs';
 
-async function acceptCookieConsent(page) {
-  const selectors = [
-    'button:has-text("同意")',
-    'button:has-text("同意する")',
-    'button:has-text("同意して閉じる")',
-    'button:has-text("Accept")',
-    'button:has-text("Accept all")',
-    'button:has-text("Agree")',
-    'button:has-text("OK")',
-    'text=同意して閉じる',
-    'text=同意する',
-    'text=Accept all',
-    'text=Accept',
-  ];
-
-  for (const sel of selectors) {
-    try {
-      const btn = page.locator(sel).first();
-      if (await btn.count()) {
-        await btn.click({ timeout: 2000 });
-        console.log('🍪 Cookie consent accepted via', sel);
-        return true;
-      }
-    } catch (_err) {
-      // try next
-    }
-  }
-  return false;
-}
-
-
 const companyTopUrl =
   COMPANY_TOP_URL || process.env.COMPANY_TOP_URL || 'https://nexx-inc.jp/index.html';
 
@@ -90,8 +59,6 @@ const companyTopUrl =
         console.warn('⚠️ ページ遷移に失敗:', navErr?.message || navErr);
         continue;
       }
-
-      await acceptCookieConsent(page);
 
       const formSchema = await analyzeContactFormWithAI(page);
 
