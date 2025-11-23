@@ -21,37 +21,6 @@ import {
 
 // import { notifySlack } from './lib/slack.mjs';
 
-async function acceptCookieConsent(page) {
-  const selectors = [
-    'button:has-text("同意")',
-    'button:has-text("同意する")',
-    'button:has-text("同意して閉じる")',
-    'button:has-text("Accept")',
-    'button:has-text("Accept all")',
-    'button:has-text("Agree")',
-    'button:has-text("OK")',
-    'text=同意して閉じる',
-    'text=同意する',
-    'text=Accept all',
-    'text=Accept',
-  ];
-
-  for (const sel of selectors) {
-    try {
-      const btn = page.locator(sel).first();
-      if (await btn.count()) {
-        await btn.click({ timeout: 2000 });
-        console.log('🍪 Cookie consent accepted via', sel);
-        return true;
-      }
-    } catch (_err) {
-      console.log('Cookie consent できませんでした！', sel);
-      // ignore and try next selector
-    }
-  }
-  return false;
-}
-
 (async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
   const senderFromSheet = await loadSenderFromSheet().catch((err) => {
@@ -169,8 +138,6 @@ async function acceptCookieConsent(page) {
           lastErrorMsg = navErr?.message || String(navErr);
           continue;
         }
-
-        await acceptCookieConsent(page);
 
         formSchema = await analyzeContactFormWithAI(page);
         if (!formSchema) {
