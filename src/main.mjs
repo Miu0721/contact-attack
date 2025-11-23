@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { findContactPageCandidates } from './url-discovery.mjs';
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
-import { fillContactForm } from './contact-form-filler.mjs';
+import { fillContactForm /*, confirmAndSubmit */ } from './contact-form-filler.mjs';
 import { SENDER_INFO, FIXED_MESSAGE, COMPANY_TOP_URL } from './config/sender.mjs';
 import { notifySlack } from './lib/slack.mjs';
 import {
