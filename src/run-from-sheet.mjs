@@ -1,6 +1,6 @@
 // src/run-from-sheet.mjs
 import { chromium } from 'playwright';
-import { findContactPageUrl } from './url-discovery.mjs';
+// URL探索ロジックは現在無効化中
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
 import { fillContactForm } from './contact-form-filler.mjs';
 
@@ -19,7 +19,7 @@ import {
   // updateContactRowColor, // 必要なら復活させる
 } from './lib/google/contactsRepo.mjs';
 
-import { notifySlack } from './lib/slack.mjs';
+// import { notifySlack } from './lib/slack.mjs';
 
 (async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
@@ -49,6 +49,8 @@ import { notifySlack } from './lib/slack.mjs';
     senderFromSheet.fixedMessage.trim().length > 0
       ? senderFromSheet.fixedMessage
       : FIXED_MESSAGE;
+
+  const contactPrompt = senderFromSheet?.contactPrompt || '';
 
   console.log('📨 使用する Sender 情報:', senderInfo);
   console.log(
@@ -93,66 +95,100 @@ import { notifySlack } from './lib/slack.mjs';
         throw new Error('Site URL / Contact URL が両方空です');
       }
 
+      // URL探索は停止中なので、contactUrl が空なら失敗としてスキップ
       if (!contactUrl) {
-        contactUrl = await findContactPageUrl(page, baseUrl);
-        if (!contactUrl) {
-          lastResult = 'form_not_found';
-          lastErrorMsg = '問い合わせフォームURLを特定できませんでした';
-          status = 'Failed';
-          console.warn('❌ 問い合わせページURLが見つからない');
+        lastResult = 'form_not_found';
+        lastErrorMsg = '問い合わせフォームURLが未設定のため処理をスキップしました';
+        status = 'Failed';
+        console.warn('❌ 問い合わせページURLが見つからない');
 
-          // Slack 通知（フォームURL見つからないケース）
-          await notifySlack(
-            `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
-              `会社名: ${contact.companyName}\n` +
-              `ベースURL: ${baseUrl}\n` +
-              `row: ${contact.rowIndex}\n` +
-              `エラー: ${lastErrorMsg}`
-          );
+        // await notifySlack(
+        //   `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
+        //     `会社名: ${contact.companyName}\n` +
+        //     `ベースURL: ${baseUrl}\n` +
+        //     `row: ${contact.rowIndex}\n` +
+        //     `エラー: ${lastErrorMsg}`
+        // );
 
-          // シート更新だけして次へ
-          await updateContactRowValues(contact, {
-            contactUrl,
-            status,
-            lastRunAt: timestamp,
-            lastResult,
-            lastErrorMsg,
-            runCount,
-          });
-          // await updateContactRowColor(contact.rowIndex, status);
-          continue;
-        }
+        await updateContactRowValues(contact, {
+          contactUrl,
+          status,
+          lastRunAt: timestamp,
+          lastResult,
+          lastErrorMsg,
+          runCount,
+        });
+        continue;
       }
 
-      console.log('📨 問い合わせページ:', contactUrl);
-      await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
+      let filledSummary = [];
+      let formSchema = null;
+      let success = false;
 
-      // 2. フォーム構造解析
-      const formSchema = await analyzeContactFormWithAI(page);
-      if (!formSchema) {
-        lastResult = 'form_schema_error';
-        lastErrorMsg = 'フォーム構造を解析できませんでした';
-        status = 'Failed';
+      // URL探索はしないので contactUrl のみを試行
+      const candidateUrls = [contactUrl];
 
-        console.warn('❌ フォーム構造解析に失敗');
+      for (const candidate of candidateUrls) {
+        contactUrl = candidate;
+        console.log('📨 問い合わせページを試行:', contactUrl);
+        try {
+          await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
+        } catch (navErr) {
+          console.warn('⚠️ ページ遷移に失敗:', navErr?.message || navErr);
+          lastErrorMsg = navErr?.message || String(navErr);
+          continue;
+        }
 
-        // Slack 通知（フォーム構造解析失敗）
-        await notifySlack(
-          `[contact-attack-bot] ❌ フォーム解析失敗\n` +
-            `会社名: ${contact.companyName}\n` +
-            `問い合わせURL: ${contactUrl}\n` +
-            `row: ${contact.rowIndex}\n` +
-            `エラー: ${lastErrorMsg}`
-        );
-      } else {
+        formSchema = await analyzeContactFormWithAI(page);
+        if (!formSchema) {
+          console.warn('❌ フォーム構造解析に失敗');
+          lastResult = 'form_schema_error';
+          lastErrorMsg = 'フォーム構造を解析できませんでした';
+          continue;
+        }
+
         console.log('🧾 form schema:', JSON.stringify(formSchema, null, 2));
 
-        // 3. フォーム自動入力（送信ボタンは押さない実装）
-        const filledSummary =
+        filledSummary =
           (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) ||
           [];
 
-        // 3.5 入力した質問項目と内容を FormLogs に出力
+        // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
+        const captchaEntry = filledSummary.find((f) => f.role === 'captcha');
+        if (captchaEntry) {
+          lastResult = 'captcha_detected';
+          lastErrorMsg = 'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
+          status = 'Failed';
+
+          try {
+            await appendFormQuestionsAndAnswers({
+              contact,
+              contactUrl,
+              siteUrl: contact.siteUrl,
+              filledSummary,
+              formSchema,
+            });
+          } catch (logErr) {
+            console.warn(
+              '⚠️ フォーム質問ログの書き込みに失敗:',
+              logErr?.message || logErr
+            );
+          }
+
+          // 次のリンク/企業へ
+          success = true; // これ以上のエラー通知を避けるため success として扱う
+          break;
+        }
+
+        if (filledSummary.length === 0) {
+          console.warn('⚠️ 入力サマリが空でした');
+          lastResult = 'fill_empty';
+          lastErrorMsg = '入力できるフィールドがありませんでした';
+          continue;
+        }
+
+        success = true;
+
         try {
           await appendFormQuestionsAndAnswers({
             contact,
@@ -169,7 +205,21 @@ import { notifySlack } from './lib/slack.mjs';
         }
 
         lastResult = 'filled';
-        status = 'Success'; // 「入力成功」で Success 扱い
+        status = 'Success';
+        break;
+      }
+
+      if (!success) {
+        status = 'Failed';
+        if (!lastResult) lastResult = 'form_not_filled';
+
+        // await notifySlack(
+        //   `[contact-attack-bot] ❌ フォーム入力に失敗（URL探索なし）\n` +
+        //     `会社名: ${contact.companyName}\n` +
+        //     `問い合わせURL候補: ${candidateUrls.join(', ')}\n` +
+        //     `row: ${contact.rowIndex}\n` +
+        //     `エラー: ${lastErrorMsg}`
+        // );
       }
     } catch (err) {
       console.error('💥 Error while processing contact:', err);
@@ -178,14 +228,14 @@ import { notifySlack } from './lib/slack.mjs';
       status = 'Failed';
 
       // Slack 通知（予期しない例外）
-      await notifySlack(
-        `[contact-attack-bot] 🔴 例外発生\n` +
-          `会社名: ${contact.companyName}\n` +
-          `siteUrl: ${contact.siteUrl}\n` +
-          `contactUrl: ${contactUrl || '(未決定)'}\n` +
-          `row: ${contact.rowIndex}\n` +
-          `エラー: ${lastErrorMsg}`
-      );
+      // await notifySlack(
+      //   `[contact-attack-bot] 🔴 例外発生\n` +
+      //     `会社名: ${contact.companyName}\n` +
+      //     `siteUrl: ${contact.siteUrl}\n` +
+      //     `contactUrl: ${contactUrl || '(未決定)'}\n` +
+      //     `row: ${contact.rowIndex}\n` +
+      //     `エラー: ${lastErrorMsg}`
+      // );
     }
 
     // 4. シート更新

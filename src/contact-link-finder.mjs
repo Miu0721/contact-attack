@@ -3,16 +3,17 @@ import { openai } from './lib/openai.mjs';
 
 /**
  * 現在の page から <a> リンク一覧を取得し、
- * gpt-5-nano に「どれが問い合わせフォームっぽいか？」を選ばせて
- * 絶対URLで返す関数
+ * gpt-4o-mini に「どれが問い合わせフォームっぽいか？」を選ばせて
+ * 絶対URLで返す関数。
+ * userPrompt を渡すと、そのプロンプトを元に選択させる。
  *
- * 見つからなければ null を返す
+ * 見つからなければ null を返す。
  */
 /**
  * 文字列URLを渡して問い合わせリンク候補を探すラッパー。
  * - 指定URLへ遷移してから既存ロジックでリンクを推定する。
  */
-export async function findContactPageUrlWithAIFromUrl(page, targetUrl) {
+export async function findContactPageUrlWithAIFromUrl(page, targetUrl, userPrompt) {
   try {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
   } catch (e) {
@@ -20,10 +21,14 @@ export async function findContactPageUrlWithAIFromUrl(page, targetUrl) {
     return null;
   }
 
-  return findContactPageUrlWithAI(page);
+  return findContactPageUrlWithAI(page, userPrompt);
 }
 
-export async function findContactPageUrlWithAI(page) {
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} [userPrompt] AI に渡す追加/上書きプロンプト。未指定なら既定の指示を使用。
+ */
+export async function findContactPageUrlWithAI(page, userPrompt) {
   const baseUrl = page.url();
 
   // 1. ページ内の <a> 要素を全部取る
@@ -51,8 +56,17 @@ export async function findContactPageUrlWithAI(page) {
     )
     .join('\n');
 
-  const prompt = `
+  const defaultPrompt = `
 You are helping to find a "contact / inquiry / お問い合わせ" page link from a website's navigation.
+Exclude job/recruit/career, privacy/policy/terms, news/blog/press/IR, and SNS links.
+Choose the most likely contact/inquiry/support/request form link.
+  `.trim();
+
+  const headPrompt =
+    userPrompt && userPrompt.trim() ? userPrompt.trim() : defaultPrompt;
+
+  const prompt = `
+${headPrompt}
 
 Base URL: ${baseUrl}
 
@@ -60,18 +74,15 @@ Here is a list of links on the page (index, text, href):
 
 ${listForModel}
 
-Which ONE link is most likely to be a contact / inquiry / お問い合わせ page?
-Respond with ONLY a JSON object in this exact format (no extra text):
-
+Return ONLY this JSON (no extra text):
 {"index": <number>, "reason": "<short reason>"}
 
-If none of the links look like a contact page, respond with:
-
+If none look like a contact page, return:
 {"index": -1, "reason": "no contact page"}
 `.trim();
 
   const response = await openai.responses.create({
-    model: 'gpt-5-nano',
+    model: 'gpt-4o-mini',
     input: prompt,
     max_output_tokens: 200,
   });

@@ -11,6 +11,8 @@ export async function analyzeContactFormWithAI(page) {
   if (!result) {
     console.warn('iframe を含めてもフォーム入力フィールドが見つかりませんでした');
   }
+  console.log('analyzeContactFormWithAIのところ')
+  console.log(JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -94,7 +96,11 @@ async function analyzeInContext(ctx, isRoot = false) {
  * 実際に OpenAI に HTML を渡して JSON スキーマを返してもらう部分
  */
 async function callFormAnalyzerModel(formHtml) {
-  const MAX_LEN = 8000;
+  console.log('formHtml length:', formHtml.length);
+  console.log(formHtml.slice(0, 500));
+  console.log('--- tail ---');
+  console.log(formHtml.slice(-500));
+  const MAX_LEN = 80000;
   const trimmedHtml =
     formHtml.length > MAX_LEN ? formHtml.slice(0, MAX_LEN) : formHtml;
 
@@ -137,7 +143,7 @@ ${trimmedHtml}
   const response = await openai.responses.create({
     model: 'gpt-5-nano',
     input: prompt,
-    max_output_tokens: 800,        // 少し多めに確保
+    max_output_tokens: 80000,        // 少し多めに確保
     reasoning: { effort: 'low' },  // reasoning を抑えてテキストを出させる
   });
 
@@ -169,25 +175,49 @@ ${trimmedHtml}
     console.warn('フォームAI JSON parse失敗 (1st):', jsonStr);
 
     // ★ フォールバック：
-    // "fields": [ ... ] の中に並んでいる { ... } を 1個ずつ抜き出して復元する
+    // "fields": [ ... ] の JSON 部分だけを抜き出してパース
     const fields = [];
 
+    // 1) "fields" の配列部分を抽出（ブラケットの対応を見てスライス）
     const fieldsIdx = jsonStr.indexOf('"fields"');
     if (fieldsIdx !== -1) {
-      const bracketIdx = jsonStr.indexOf('[', fieldsIdx);
-      if (bracketIdx !== -1) {
-        // "[" の後ろから末尾までを取り出す（壊れていてもOK）
-        const fieldsText = jsonStr.slice(bracketIdx + 1);
+      const startBracket = jsonStr.indexOf('[', fieldsIdx);
+      if (startBracket !== -1) {
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = startBracket; i < jsonStr.length; i += 1) {
+          const ch = jsonStr[i];
+          if (ch === '[') depth += 1;
+          else if (ch === ']') {
+            depth -= 1;
+            if (depth === 0) {
+              endIdx = i;
+              break;
+            }
+          }
+        }
 
-        // ネストの無い { ... } を全部拾う（各フィールドオブジェクト）
-        const objectMatches = fieldsText.match(/\{[^{}]*\}/g) || [];
-
-        for (const objText of objectMatches) {
+        if (endIdx !== -1) {
+          const arrText = jsonStr.slice(startBracket, endIdx + 1);
           try {
-            const fieldObj = JSON.parse(objText);
-            fields.push(fieldObj);
+            const parsedFields = JSON.parse(arrText);
+            if (Array.isArray(parsedFields)) {
+              for (const f of parsedFields) {
+                if (f && typeof f === 'object') fields.push(f);
+              }
+            }
           } catch (_ignore) {
-            // 途中で壊れた privacy フィールドなどは無視
+            // 2) 個別オブジェクトを拾うフォールバック
+            const body = jsonStr.slice(startBracket + 1, endIdx);
+            const objectMatches = body.match(/\{[^{}]*\}/g) || [];
+            for (const objText of objectMatches) {
+              try {
+                const fieldObj = JSON.parse(objText);
+                fields.push(fieldObj);
+              } catch (_ignore2) {
+                // 破損行は無視
+              }
+            }
           }
         }
       }
