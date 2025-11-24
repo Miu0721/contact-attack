@@ -121,6 +121,7 @@ export async function loadSenderFromSheet() {
     personalPhone: map.sender_personal_phone || '',
     referral: map.sender_referral || '',
     gender: map.sender_gender || '',
+    inquiryCategory: map.sender_inquiry_category || '',
     postalCode: map.sender_postal_code || '',
     prefecture: map.sender_prefecture || '',
     address: map.sender_address || '',

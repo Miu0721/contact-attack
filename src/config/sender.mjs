@@ -15,6 +15,7 @@ export const SENDER_INFO = {
   personalPhone: '09012345678',
   referral: 'Web検索',
   gender: '男性',
+  inquiryCategory: '資料請求',
   postalCode: '1000001',
   prefecture: '東京都',
   address: '千代田区千代田1-1',

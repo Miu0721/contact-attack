@@ -128,6 +128,8 @@ Possible roles (use one of these strings):
 - "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
 - "referral"         : how you heard about us (知ったきっかけ)
 - "gender"           : gender
+- "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
+- "inquiry_category" : inquiry type/category (資料請求 / お問い合わせ種別) ※同義
 - "postal_code"      : postal code / zip
 - "prefecture"       : prefecture / state
 - "address"          : address

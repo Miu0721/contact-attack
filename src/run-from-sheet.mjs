@@ -47,6 +47,7 @@ import {
     personalPhone: sheetSender.personalPhone || SENDER_INFO.personalPhone,
     referral: sheetSender.referral || SENDER_INFO.referral,
     gender: sheetSender.gender || SENDER_INFO.gender,
+    inquiryCategory: sheetSender.inquiryCategory || SENDER_INFO.inquiryCategory,
     postalCode: sheetSender.postalCode || SENDER_INFO.postalCode,
     prefecture: sheetSender.prefecture || SENDER_INFO.prefecture,
     address: sheetSender.address || SENDER_INFO.address,
