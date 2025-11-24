@@ -105,60 +105,143 @@ async function callFormAnalyzerModel(formHtml) {
     formHtml.length > MAX_LEN ? formHtml.slice(0, MAX_LEN) : formHtml;
 
   const prompt = `
-You are an HTML contact form analyzer.
-I will give you the HTML of a contact/inquiry form or a group of input fields.
-Inspect the <input>, <textarea>, and <select> fields and assign a semantic role to each field.
+    あなたは「HTMLお問い合わせフォーム解析ツール」です。
+    
+    ## タスク概要
+    これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
+    その中に含まれる <input>, <textarea>, <select> 要素（※後述の対象ルール参照）を解析し、
+    それぞれのフィールドに対して「意味的な役割(role)」を 1 つだけ割り当ててください。
+    
+    対象となるサイトは主に **日本語サイト** です。
+    ラベルや周辺テキスト、name/id 属性、placeholder の日本語からフィールドの意味を推測してください。
+    
+    ## 付与できる role 一覧
+    各フィールドには、以下のいずれか 1 つの role を必ず割り当てます。
+    
+    - "name"             : 氏名・お名前（担当者名, お名前 など、姓と名が分かれていない場合）
+    - "first_name"       : 名（下の名前, first name）
+    - "last_name"        : 姓（苗字, last name）
+    - "name_kana"        : 氏名（フリガナ）全体
+    - "first_name_kana"  : 名のフリガナ
+    - "last_name_kana"   : 姓のフリガナ
+    - "email"            : メールアドレス
+    - "company"          : 会社名・法人名（御社名, 貴社名 など）
+    - "department"       : 部署・所属・役職を含む職位（部署名, 役職名 など）
+    - "phone"            : 電話番号（会社か個人か不明な場合や混在している場合）
+    - "company_phone"    : 会社の電話番号（代表番号, 会社電話番号 など明確に会社用と書かれている場合）
+    - "personal_phone"   : 個人・携帯電話番号（携帯番号, ご本人様の電話番号 など明確に個人用の場合）
+    - "title"            : 役職（役職, 肩書き など）
+    - "subject"          : 件名・タイトル（お問い合わせ件名, 題名 など）
+    - "body"             : お問い合わせ内容・相談内容・本文（自由記入のメインメッセージ）
+    - "category"         : お問い合わせ種別・ご用件の種別（資料請求 / お問い合わせ種別 / ご用件など）
+    - "inquiry_category" : "category" と同義。実質お問い合わせ種別とみなせる場合に使用可
+    - "referral"         : 当サイトを知ったきっかけ（どこで知りましたか, 紹介者, 流入経路 など）
+    - "gender"           : 性別
+    - "postal_code"      : 郵便番号（〒, 郵便番号）
+    - "prefecture"       : 都道府県
+    - "address"          : 住所（市区町村・番地・建物名など。都道府県や郵便番号を除く残りの住所）
+    - "age"              : 年齢
+    - "other"            : 上記のどれにもはっきり当てはまらないもの
+    
+    ## role の決定ルール（重要）
+    - **推測しすぎないこと。迷ったら必ず "other" を使う。**
+    - 「それっぽい」程度の曖昧な根拠では、役割を決めないでください。
+    - 以下のように、意味が明確な場合のみ、より具体的な role を使ってください。
+    
+    ### 氏名まわり
+    - 「姓」「苗字」「last name」 → "last_name"
+    - 「名」「first name」 → "first_name"
+    - 「お名前」「氏名」 で姓・名の分割がない → "name"
+    - 「フリガナ」「ふりがな」全体 → "name_kana"
+    - 「セイ」「姓(フリガナ)」 → "last_name_kana"
+    - 「メイ」「名(フリガナ)」 → "first_name_kana"
+    
+    ### 電話番号まわり
+    - 「会社電話番号」「代表番号」「会社の連絡先」など → "company_phone"
+    - 「携帯電話」「ご本人様の電話番号」「携帯番号」など → "personal_phone"
+    - 会社用か個人用か判別できない → "phone"
+    
+    ### 住所まわり
+    - 「郵便番号」「〒」のみ → "postal_code"
+    - 「都道府県」のみ → "prefecture"
+    - 市区町村・番地・建物名などの住所 → "address"
+    
+    ### お問い合わせ内容・種別
+    - 「お問い合わせ内容」「ご相談内容」「メッセージ本文」など → "body"
+    - 「お問い合わせ種別」「ご用件」「お問い合わせの種類」など → "category" または "inquiry_category"
+      - どちらを使ってもよいが、同じフォーム内では基本的にどちらか一方に統一すること。
+    
+    ### その他
+    - 「どこで当サイトを知りましたか」「当サイトを知ったきっかけ」 → "referral"
+    - 「性別」 → "gender"
+    - 「年齢」「ご年齢」 → "age"
+    - プライバシーポリシーは、全て、同意してください。
 
-Possible roles (use one of these strings):
-- "name"             : person's full name (担当者名, お名前)
-- "first_name"       : given name (名)
-- "last_name"        : family name (姓)
-- "name_kana"        : full name in kana (フリガナ)
-- "first_name_kana"  : given name in kana
-- "last_name_kana"   : family name in kana
-- "email"            : email address
-- "company"          : company/organization name
-- "department"       : department or job title
-- "phone"            : phone number or mobile number
-- "company_phone"    : company phone number
-- "personal_phone"   : personal/mobile phone number
-- "title"            : job title or role (役職)
-- "subject"          : subject/title of the inquiry
-- "body"             : main message / inquiry content
-- "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
-- "referral"         : how you heard about us (知ったきっかけ)
-- "gender"           : gender
-- "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
-- "inquiry_category" : inquiry type/category (資料請求 / お問い合わせ種別) ※同義
-- "postal_code"      : postal code / zip
-- "prefecture"       : prefecture / state
-- "address"          : address
-- "age"              : age
-- "other"            : any other fields
-
-Return ONLY a JSON object in this exact format (no extra text):
-
-{
-  "fields": [
+    
+    ## 含めるべきフィールド / 無視するフィールド
+    ### 含める（出力対象）
+    - ユーザーが入力・選択するデータ項目：
+      - <input type="text|email|tel|number|password|radio|checkbox">
+      - <textarea>
+      - <select>
+    
+    ### 無視する（出力しない）
+    - <input type="hidden">
+    - 送信ボタン・リセットボタンなど：
+      - <input type="submit|reset|button|image">
+      - <button> などの純粋なボタン
+    - 装飾用・技術的な要素で、ユーザーがデータを入力しないもの
+    
+    ### ラジオボタン / チェックボックス / セレクトボックス
+    - 同じ質問項目に属する複数の radio / checkbox / option は、
+      「1つの論理的フィールド」として扱ってください。
+    - ラベルや周辺テキストから role を判定できる場合は付与し、
+      判定できない場合は "other" にしてください。
+    
+    ## 出力フォーマット（厳守）
+    **JSON オブジェクト 1 つだけ** を、次の構造で返してください。  
+    JSON 以外のテキスト（説明文、コメント、コードブロック記法など）は一切出力してはいけません。
+    
+    - 有効な JSON を返すこと（ダブルクォート必須、末尾カンマ禁止）。
+    - name 属性や id 属性が存在しない場合は ""（空文字）を入れてください。
+    - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
+      - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
+    
+    出力すべき JSON の構造（例：中身の値はダミーです）:
+    
     {
-      "nameAttr": "...",        // value of name="" or "" if missing
-      "idAttr": "...",          // value of id="" or "" if missing
-      "type": "...",            // e.g. text, email, tel, textarea, select
-      "label": "...",           // best guess: label/placeholder/aria-label
-      "role": "..."             // one of the roles above
+      "fields": [
+        {
+          "nameAttr": "your_name",
+          "idAttr": "name",
+          "type": "text",
+          "label": "お名前",
+          "role": "name"
+        },
+        {
+          "nameAttr": "your_email",
+          "idAttr": "email",
+          "type": "email",
+          "label": "メールアドレス",
+          "role": "email"
+        }
+      ]
     }
-  ]
-}
-
-Here is the HTML of the form or field group:
-
-${trimmedHtml}
-`.trim();
+    
+    ## 実際の入力
+    これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
+    上記のルールに従って解析し、上記フォーマットどおりの JSON オブジェクトを 1 つだけ出力してください。
+    
+    対象 HTML:
+    
+    ${trimmedHtml}
+    `.trim();
+    
 
   const response = await openai.responses.create({
     model: 'gpt-5-nano',
     input: prompt,
-    max_output_tokens: 80000,        // 少し多めに確保
+    max_output_tokens: 15000,        // 少し多めに確保
     reasoning: { effort: 'low' },  // reasoning を抑えてテキストを出させる
   });
 
