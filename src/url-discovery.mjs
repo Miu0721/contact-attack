@@ -164,9 +164,9 @@ If none look like a contact page, return:
 `.trim();
 
   const response = await openai.responses.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     input: prompt,
-    max_output_tokens: 100,
+    max_output_tokens: 20000,
   });
   console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
 
@@ -247,8 +247,8 @@ export async function findContactPageCandidates(page, companyTopUrl, userPrompt)
 
   const candidates = [];
 
-  const ruleHits = await collectRuleBasedContactUrls(page, companyTopUrl);
-  candidates.push(...ruleHits);
+  // ルールベース探索は現在無効化（AI のみ使用）
+  const ruleHits = [];
 
   // AI 判定は最新のTOPで実行
   await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });

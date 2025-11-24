@@ -84,7 +84,7 @@ If none look like a contact page, return:
   const response = await openai.responses.create({
     model: 'gpt-4o-mini',
     input: prompt,
-    max_output_tokens: 200,
+    max_output_tokens: 20000,
   });
 
   // ▼ ここを「より安全」にした：output_text が空でも他のパスを見に行く

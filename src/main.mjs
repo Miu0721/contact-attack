@@ -3,7 +3,7 @@ import { findContactPageCandidates } from './url-discovery.mjs';
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
 import { fillContactForm /*, confirmAndSubmit */ } from './contact-form-filler.mjs';
 import { SENDER_INFO, FIXED_MESSAGE, COMPANY_TOP_URL } from './config/sender.mjs';
-import { notifySlack } from './lib/slack.mjs';
+// import { notifySlack } from './lib/slack.mjs';
 import {
   loadSenderFromSheet,
   appendFormQuestionsAndAnswers,
@@ -46,7 +46,7 @@ const companyTopUrl =
     if (!candidates.length) {
       const msg = `❌ 問い合わせページURLが見つかりませんでした: ${companyTopUrl}`;
       console.error(msg);
-      await notifySlack(`[contact-attack-bot] ${msg}`);
+      // await notifySlack(`[contact-attack-bot] ${msg}`);
       return;
     }
 
@@ -120,13 +120,13 @@ const companyTopUrl =
     if (!success) {
       const msg = `❌ 全候補を試しましたがフォーム入力に失敗しました: ${companyTopUrl}`;
       console.error(msg);
-      await notifySlack(`[contact-attack-bot] ${msg}`);
+      // await notifySlack(`[contact-attack-bot] ${msg}`);
     }
   } catch (err) {
     console.error('🔴 致命的エラー:', err);
-    await notifySlack(
-      `[contact-attack-bot] 🔴 致命的エラー: ${err.message || String(err)}`
-    );
+    // await notifySlack(
+    //   `[contact-attack-bot] 🔴 致命的エラー: ${err.message || String(err)}`
+    // );
   } finally {
     if (browser) {
       await browser.close();
