@@ -10,10 +10,18 @@ export const SENDER_INFO = {
   firstName: '太郎',
   lastNameKana: 'テスト',
   firstNameKana: 'タロウ',
+  title: '部長',
+  companyPhone: '0312345678',
+  personalPhone: '09012345678',
+  referral: 'Web検索',
+  gender: '男性',
+  postalCode: '1000001',
+  prefecture: '東京都',
+  address: '千代田区千代田1-1',
+  age: '35',
   email: 'test@example.com',
   company: 'テスト株式会社',
   department: '営業部',
-  phone: '0312345678',
 };
 
 export const FIXED_MESSAGE = `

@@ -201,6 +201,15 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
     if (role === 'company')     value = senderInfo.company || '';
     if (role === 'department')  value = senderInfo.department || '';
     if (role === 'phone')       value = senderInfo.phone || '';
+    if (role === 'company_phone') value = senderInfo.companyPhone || senderInfo.phone || '';
+    if (role === 'personal_phone') value = senderInfo.personalPhone || senderInfo.phone || '';
+    if (role === 'title')       value = senderInfo.title || '';
+    if (role === 'referral')    value = senderInfo.referral || '';
+    if (role === 'gender')      value = senderInfo.gender || '';
+    if (role === 'postal_code') value = senderInfo.postalCode || '';
+    if (role === 'prefecture')  value = senderInfo.prefecture || '';
+    if (role === 'address')     value = senderInfo.address || '';
+    if (role === 'age')         value = senderInfo.age || '';
     if (role === 'body')        value = fixedMessage || '';
 
     // お問い合わせ種別（カテゴリ）は固定ラベル
