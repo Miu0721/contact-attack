@@ -213,7 +213,8 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
     if (role === 'body')        value = fixedMessage || '';
 
     // お問い合わせ種別（カテゴリ）は固定ラベル
-    if (role === 'category')    value = CATEGORY_LABEL;
+    if (role === 'category' || role === 'inquiry_category')
+      value = senderInfo.inquiryCategory || CATEGORY_LABEL;
 
     // select / radio 以外で value が空ならスキップ
     if (!value && type !== 'select' && type !== 'radio') continue;
