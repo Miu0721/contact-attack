@@ -120,9 +120,18 @@ Possible roles (use one of these strings):
 - "company"          : company/organization name
 - "department"       : department or job title
 - "phone"            : phone number or mobile number
+- "company_phone"    : company phone number
+- "personal_phone"   : personal/mobile phone number
+- "title"            : job title or role (役職)
 - "subject"          : subject/title of the inquiry
 - "body"             : main message / inquiry content
 - "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
+- "referral"         : how you heard about us (知ったきっかけ)
+- "gender"           : gender
+- "postal_code"      : postal code / zip
+- "prefecture"       : prefecture / state
+- "address"          : address
+- "age"              : age
 - "other"            : any other fields
 
 Return ONLY a JSON object in this exact format (no extra text):
