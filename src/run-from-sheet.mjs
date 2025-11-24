@@ -19,7 +19,7 @@ import {
   // updateContactRowColor, // 必要なら復活させる
 } from './lib/google/contactsRepo.mjs';
 
-// import { notifySlack } from './lib/slack.mjs';
+import { notifySlack } from './lib/slack.mjs';
 
 (async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
@@ -116,13 +116,13 @@ import {
         status = 'Failed';
         console.warn('❌ 問い合わせページURLが見つからない');
 
-        // await notifySlack(
-        //   `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
-        //     `会社名: ${contact.companyName}\n` +
-        //     `ベースURL: ${baseUrl}\n` +
-        //     `row: ${contact.rowIndex}\n` +
-        //     `エラー: ${lastErrorMsg}`
-        // );
+        await notifySlack(
+          `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
+            `会社名: ${contact.companyName}\n` +
+            `ベースURL: ${baseUrl}\n` +
+            `row: ${contact.rowIndex}\n` +
+            `エラー: ${lastErrorMsg}`
+        );
 
         await updateContactRowValues(contact, {
           contactUrl,
@@ -229,13 +229,13 @@ import {
         status = 'Failed';
         if (!lastResult) lastResult = 'form_not_filled';
 
-        // await notifySlack(
-        //   `[contact-attack-bot] ❌ フォーム入力に失敗（URL探索なし）\n` +
-        //     `会社名: ${contact.companyName}\n` +
-        //     `問い合わせURL候補: ${candidateUrls.join(', ')}\n` +
-        //     `row: ${contact.rowIndex}\n` +
-        //     `エラー: ${lastErrorMsg}`
-        // );
+        await notifySlack(
+          `[contact-attack-bot] ❌ フォーム入力に失敗（URL探索なし）\n` +
+            `会社名: ${contact.companyName}\n` +
+            `問い合わせURL候補: ${candidateUrls.join(', ')}\n` +
+            `row: ${contact.rowIndex}\n` +
+            `エラー: ${lastErrorMsg}`
+        );
       }
     } catch (err) {
       console.error('💥 Error while processing contact:', err);
@@ -244,14 +244,14 @@ import {
       status = 'Failed';
 
       // Slack 通知（予期しない例外）
-      // await notifySlack(
-      //   `[contact-attack-bot] 🔴 例外発生\n` +
-      //     `会社名: ${contact.companyName}\n` +
-      //     `siteUrl: ${contact.siteUrl}\n` +
-      //     `contactUrl: ${contactUrl || '(未決定)'}\n` +
-      //     `row: ${contact.rowIndex}\n` +
-      //     `エラー: ${lastErrorMsg}`
-      // );
+      await notifySlack(
+        `[contact-attack-bot] 🔴 例外発生\n` +
+          `会社名: ${contact.companyName}\n` +
+          `siteUrl: ${contact.siteUrl}\n` +
+          `contactUrl: ${contactUrl || '(未決定)'}\n` +
+          `row: ${contact.rowIndex}\n` +
+          `エラー: ${lastErrorMsg}`
+      );
     }
 
     // 4. シート更新
