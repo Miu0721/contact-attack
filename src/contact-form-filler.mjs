@@ -288,43 +288,61 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
               break;
             }
           } else {
-            // value で選択
-            await page.selectOption(
-              // selectOption は使えないので、evaluate でチェックする
-              // → value で再検索して check
-              // ここではもう一度 evaluate して check を true にする
-              // （Playwright の API だけだと group 指定がやや面倒なので JS 側で完結）
-              await (async () => {
-                await page.evaluate(
-                  ({ selector, val }) => {
-                    const inputs = Array.from(
-                      document.querySelectorAll(selector)
-                    ).filter(el => el instanceof HTMLInputElement);
-                    for (const input of inputs) {
-                      if (input.value === val) {
-                        input.checked = true;
-                        break;
-                      }
+            // value または id で選択
+            const loc = page.locator(
+              `${sel}[value="${matchedValue}"], ${sel}#${matchedValue}`
+            );
+            if (await loc.count()) {
+              await loc.first().check({ force: true }).catch(() => loc.first().click({ force: true }));
+              console.log(
+                `🔘 Checked radio(value="${matchedValue}") for role="${role}" via ${sel}`
+              );
+              filledSummary.push({
+                role,
+                type,
+                selector: sel,
+                label,
+                nameAttr,
+                idAttr,
+                value: matchedValue,
+              });
+              filled = true;
+              break;
+            } else {
+              // evaluate で value マッチを確認
+              const changed = await page.evaluate(
+                ({ selector, val }) => {
+                  const inputs = Array.from(
+                    document.querySelectorAll(selector)
+                  ).filter(el => el instanceof HTMLInputElement);
+                  for (const input of inputs) {
+                    if (input.value === val || input.id === val) {
+                      input.checked = true;
+                      input.dispatchEvent(new Event('change', { bubbles: true }));
+                      return true;
                     }
-                  },
-                  { selector: sel, val: matchedValue }
+                  }
+                  return false;
+                },
+                { selector: sel, val: matchedValue }
+              );
+              if (changed) {
+                console.log(
+                  `🔘 Checked radio(value="${matchedValue}") for role="${role}" via ${sel}`
                 );
-              })()
-            );
-            console.log(
-              `🔘 Checked radio(value="${matchedValue}") for role="${role}" via ${sel}`
-            );
-            filledSummary.push({
-              role,
-              type,
-              selector: sel,
-              label,
-              nameAttr,
-              idAttr,
-              value: matchedValue,
-            });
-            filled = true;
-            break;
+                filledSummary.push({
+                  role,
+                  type,
+                  selector: sel,
+                  label,
+                  nameAttr,
+                  idAttr,
+                  value: matchedValue,
+                });
+                filled = true;
+                break;
+              }
+            }
           }
         } catch (e) {
           console.warn(`⚠️ Failed to select radio for ${sel} role="${role}":`, e.message);
