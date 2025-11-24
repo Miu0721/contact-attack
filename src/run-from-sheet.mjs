@@ -38,6 +38,10 @@ import {
   const senderInfo = {
     name: sheetSender.name || SENDER_INFO.name,
     nameKana: sheetSender.nameKana || SENDER_INFO.nameKana,
+    lastName: sheetSender.lastName || SENDER_INFO.lastName,
+    firstName: sheetSender.firstName || SENDER_INFO.firstName,
+    lastNameKana: sheetSender.lastNameKana || SENDER_INFO.lastNameKana,
+    firstNameKana: sheetSender.firstNameKana || SENDER_INFO.firstNameKana,
     email: sheetSender.email || SENDER_INFO.email,
     company: sheetSender.company || SENDER_INFO.company,
     department: sheetSender.department || SENDER_INFO.department,

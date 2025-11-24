@@ -193,6 +193,10 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
 
     if (role === 'name')        value = senderInfo.name || '';
     if (role === 'name_kana')   value = senderInfo.nameKana || '';
+    if (role === 'first_name')       value = senderInfo.firstName || senderInfo.name || '';
+    if (role === 'last_name')        value = senderInfo.lastName || senderInfo.name || '';
+    if (role === 'first_name_kana')  value = senderInfo.firstNameKana || senderInfo.nameKana || '';
+    if (role === 'last_name_kana')   value = senderInfo.lastNameKana || senderInfo.nameKana || '';
     if (role === 'email')       value = senderInfo.email || '';
     if (role === 'company')     value = senderInfo.company || '';
     if (role === 'department')  value = senderInfo.department || '';

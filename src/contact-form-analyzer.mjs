@@ -110,16 +110,20 @@ I will give you the HTML of a contact/inquiry form or a group of input fields.
 Inspect the <input>, <textarea>, and <select> fields and assign a semantic role to each field.
 
 Possible roles (use one of these strings):
-- "name"         : person's name (担当者名, お名前)
-- "name_kana"    : name in kana (フリガナ)
-- "email"        : email address
-- "company"      : company/organization name
-- "department"   : department or job title
-- "phone"        : phone number or mobile number
-- "subject"      : subject/title of the inquiry
-- "body"         : main message / inquiry content
-- "category"     : inquiry type/category (資料請求 / お問い合わせ種別)
-- "other"        : any other fields
+- "name"             : person's full name (担当者名, お名前)
+- "first_name"       : given name (名)
+- "last_name"        : family name (姓)
+- "name_kana"        : full name in kana (フリガナ)
+- "first_name_kana"  : given name in kana
+- "last_name_kana"   : family name in kana
+- "email"            : email address
+- "company"          : company/organization name
+- "department"       : department or job title
+- "phone"            : phone number or mobile number
+- "subject"          : subject/title of the inquiry
+- "body"             : main message / inquiry content
+- "category"         : inquiry type/category (資料請求 / お問い合わせ種別)
+- "other"            : any other fields
 
 Return ONLY a JSON object in this exact format (no extra text):
 

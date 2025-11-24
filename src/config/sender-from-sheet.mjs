@@ -105,8 +105,17 @@ export async function loadSenderFromSheet() {
   }
 
   const senderInfo = {
-    name: map.sender_name || '',
-    nameKana: map.sender_name_kana || '',
+    // フルネームが優先、無ければ姓+名の結合
+    name:
+      map.sender_name ||
+      `${map.sender_last_name || ''}${map.sender_first_name || ''}`.trim(),
+    nameKana:
+      map.sender_name_kana ||
+      `${map.sender_last_name_kana || ''}${map.sender_first_name_kana || ''}`.trim(),
+    lastName: map.sender_last_name || '',
+    firstName: map.sender_first_name || '',
+    lastNameKana: map.sender_last_name_kana || '',
+    firstNameKana: map.sender_first_name_kana || '',
     email: map.sender_email || '',
     company: map.sender_company || '',
     department: map.sender_department || '',
