@@ -45,26 +45,28 @@ async function appendFormLogSafe(params) {
 
   const senderInfo = mergeSenderInfo(SENDER_INFO, sheetSender);
 
-  const fixedMessage =
-    senderFromSheet?.fixedMessage &&
-    senderFromSheet.fixedMessage.trim().length > 0
-      ? senderFromSheet.fixedMessage
+  const message =
+    senderFromSheet?.message &&
+    senderFromSheet.message.trim().length > 0
+      ? senderFromSheet.message
       : FIXED_MESSAGE;
 
   const contactPrompt = senderFromSheet?.contactPrompt || '';
 
   console.log('📨 使用する Sender 情報:', senderInfo);
   console.log(
-    '📝 fixedMessage の先頭30文字:',
-    fixedMessage ? fixedMessage.slice(0, 30) + '...' : '(空)'
+    '📝 message の先頭30文字:',
+    message ? message.slice(0, 30) + '...' : '(空)'
   );
 
+  // 1. Contacts シートからデータを取得
   const contacts = await fetchContacts();
   if (!contacts.length) {
     console.log('Contacts シートにデータがありません');
     return;
   }
 
+  // 2. ブラウザを起動
   const browser = await chromium.launch({ headless: false });
   const page = await browser.newPage();
 
@@ -90,7 +92,7 @@ async function appendFormLogSafe(params) {
     let contactUrl = contact.contactUrl;
 
     try {
-      // 1. URL 決定（Contact URL が空ならサイトTOPから探索）
+      // 1. サイトURLをしContactsシートから取得
       const baseUrl = contact.siteUrl || contact.contactUrl;
       if (!baseUrl) {
         throw new Error('Site URL / Contact URL が両方空です');
@@ -99,14 +101,18 @@ async function appendFormLogSafe(params) {
       // 候補URLを取得（指定済み contactUrl を優先、無ければ探索）
       const candidateUrls = contactUrl
         ? [contactUrl]
+        // コンタクトページURLが存在しなければ、　findContactPageCandidates で探索
         : await findContactPageCandidates(page, baseUrl, contactPrompt);
 
+      // コンタクトページが見つからなければ、エラーを出す。　
       if (!candidateUrls.length) {
         lastResult = 'form_not_found';
         lastErrorMsg = '問い合わせフォームURLを特定できませんでした';
         status = 'Failed';
         console.warn('❌ 問い合わせページURLが見つからない');
 
+
+      // slack通知処理
         // await notifySlack(
         //   `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
         //     `会社名: ${contact.companyName}\n` +
@@ -115,6 +121,7 @@ async function appendFormLogSafe(params) {
         //     `エラー: ${lastErrorMsg}`
         // );
 
+        // Contactsシートを更新（コンタクトページURL）
         await updateContactRowValues(contact, {
           contactUrl,
           status,
@@ -130,6 +137,7 @@ async function appendFormLogSafe(params) {
       let formSchema = null;
       let success = false;
 
+
       for (const candidate of candidateUrls) {
         contactUrl = candidate;
         console.log('📨 問い合わせページを試行:', contactUrl);
@@ -141,7 +149,8 @@ async function appendFormLogSafe(params) {
           continue;
         }
 
-        formSchema = await analyzeContactFormWithAI(page);
+        // コンタクトページのフォーム構造を解析
+        formSchema = await analyzeContactFormWithAI(page, senderInfo, message);
         if (!formSchema) {
           console.warn('❌ フォーム構造解析に失敗');
           lastResult = 'form_schema_error';
@@ -151,8 +160,9 @@ async function appendFormLogSafe(params) {
 
         console.log('🧾 form schema:', JSON.stringify(formSchema, null, 2));
 
+        // AIの解析をもとに、フォームを入力
         filledSummary =
-          (await fillContactForm(page, formSchema, senderInfo, fixedMessage)) ||
+          (await fillContactForm(page, formSchema, senderInfo, message)) ||
           [];
 
         // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
@@ -199,6 +209,7 @@ async function appendFormLogSafe(params) {
         break;
       }
 
+      // フォームが入力できなかった場合、エラーを出す。
       if (!success) {
         status = 'Failed';
         if (!lastResult) lastResult = 'form_not_filled';

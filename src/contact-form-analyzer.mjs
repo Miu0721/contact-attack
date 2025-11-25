@@ -7,8 +7,8 @@ import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mj
  * ページ全体（iframeも含めて）から
  * input / textarea / select を集めて AI に解析させる
  */
-export async function analyzeContactFormWithAI(page) {
-  const result = await analyzeInContext(page, true);
+export async function analyzeContactFormWithAI(page, senderInfo = {}, message = '') {
+  const result = await analyzeInContext(page, true, senderInfo, message);
   if (!result) {
     console.warn('iframe を含めてもフォーム入力フィールドが見つかりませんでした');
   }
@@ -18,8 +18,9 @@ export async function analyzeContactFormWithAI(page) {
 /**
  * Page / Frame 共通の処理
  * ctx: Playwright の Page または Frame
+ * コンタクトページにある　フォームを解析して、全てのタグを返す関数。
  */
-async function analyzeInContext(ctx, isRoot = false) {
+async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = '') {
   await ctx.waitForTimeout(isRoot ? 2000 : 1000);
 
   // 何かしら出てくるのを一旦待つ
@@ -29,7 +30,7 @@ async function analyzeInContext(ctx, isRoot = false) {
     })
     .catch(() => {});
 
-  // 1. まず form があればその outerHTML を使う
+  // 1. まず form があればその outerHTML を使う。　なければ、input/textarea/select を拾う。
   const forms = await ctx.$$('form');
 
   let fieldsHtml = '';
@@ -56,7 +57,7 @@ async function analyzeInContext(ctx, isRoot = false) {
       ? fieldsHtml
       : `<form>\n${fieldsHtml}\n</form>`; // 仮フォームとしてラップ
 
-    return await callFormAnalyzerModel(formHtml);
+    return await callFormAnalyzerModel(formHtml, senderInfo, message);
   }
 
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
@@ -75,7 +76,7 @@ async function analyzeInContext(ctx, isRoot = false) {
       const frame = await iframe.contentFrame();
       if (!frame) continue;
 
-      const res = await analyzeInContext(frame, false);
+      const res = await analyzeInContext(frame, false, senderInfo, message);
       if (res) return res; // iframe 内で解析できたらそれを返す
     } catch (e) {
       console.warn('iframe 探索中にエラー:', e.message);
@@ -89,12 +90,31 @@ async function analyzeInContext(ctx, isRoot = false) {
 /**
  * 実際に OpenAI に HTML を渡して JSON スキーマを返してもらう部分
  */
-async function callFormAnalyzerModel(formHtml) {
+function buildSenderContext(senderInfo = {}, message = '') {
+  const entries = Object.entries(senderInfo || {})
+    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
+    .map(([k, v]) => `${k}: ${v}`);
+
+  const contextLines = [];
+  if (entries.length) {
+    contextLines.push('Sender info:');
+    contextLines.push(...entries.map((e) => `- ${e}`));
+  }
+  if (message && message.trim()) {
+    contextLines.push('Message:');
+    contextLines.push(message.slice(0, 120) + (message.length > 120 ? '...' : ''));
+  }
+  return contextLines.length ? contextLines.join('\n') : '';
+}
+
+async function callFormAnalyzerModel(formHtml, senderInfo, message) {
   console.log('formHtml length:', formHtml.length);
 
   const MAX_LEN = 80000;
   const trimmedHtml =
     formHtml.length > MAX_LEN ? formHtml.slice(0, MAX_LEN) : formHtml;
+
+  const senderContext = buildSenderContext(senderInfo, message);
 
   const prompt = `
     あなたは「HTMLお問い合わせフォーム解析ツール」です。
@@ -102,73 +122,21 @@ async function callFormAnalyzerModel(formHtml) {
     ## タスク概要
     これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
     その中に含まれる <input>, <textarea>, <select> 要素（※後述の対象ルール参照）を解析し、
-    それぞれのフィールドに対して「意味的な役割(role)」を 1 つだけ割り当ててください。
+    それぞれのフィールドに対して、Sender情報をもとに「意味的な役割(role)」を 1 つだけ割り当ててください。
     
     対象となるサイトは主に **日本語サイト** です。
     ラベルや周辺テキスト、name/id 属性、placeholder の日本語からフィールドの意味を推測してください。
     
-    ## 付与できる role 一覧
-    各フィールドには、以下のいずれか 1 つの role を必ず割り当てます。
-    
-    - "name"             : 氏名・お名前（担当者名, お名前 など、姓と名が分かれていない場合）
-    - "first_name"       : 名（下の名前, first name）
-    - "last_name"        : 姓（苗字, last name）
-    - "name_kana"        : 氏名（フリガナ）全体
-    - "first_name_kana"  : 名のフリガナ
-    - "last_name_kana"   : 姓のフリガナ
-    - "email"            : メールアドレス
-    - "company"          : 会社名・法人名（御社名, 貴社名 など）
-    - "department"       : 部署・所属・役職を含む職位（部署名, 役職名 など）
-    - "phone"            : 電話番号（会社か個人か不明な場合や混在している場合）
-    - "company_phone"    : 会社の電話番号（代表番号, 会社電話番号 など明確に会社用と書かれている場合）
-    - "personal_phone"   : 個人・携帯電話番号（携帯番号, ご本人様の電話番号 など明確に個人用の場合）
-    - "title"            : 役職（役職, 肩書き など）
-    - "subject"          : 件名・タイトル（お問い合わせ件名, 題名 など）
-    - "body"             : お問い合わせ内容・相談内容・本文（自由記入のメインメッセージ）
-    - "category"         : お問い合わせ種別・ご用件の種別（資料請求 / お問い合わせ種別 / ご用件など）
-    - "inquiry_category" : "category" と同義。実質お問い合わせ種別とみなせる場合に使用可
-    - "referral"         : 当サイトを知ったきっかけ（どこで知りましたか, 紹介者, 流入経路 など）
-    - "gender"           : 性別
-    - "postal_code"      : 郵便番号（〒, 郵便番号）
-    - "prefecture"       : 都道府県
-    - "address"          : 住所（市区町村・番地・建物名など。都道府県や郵便番号を除く残りの住所）
-    - "age"              : 年齢
-    - "other"            : 上記のどれにもはっきり当てはまらないもの
     
     ## role の決定ルール（重要）
     - **推測しすぎないこと。迷ったら必ず "other" を使う。**
     - 「それっぽい」程度の曖昧な根拠では、役割を決めないでください。
     - 以下のように、意味が明確な場合のみ、より具体的な role を使ってください。
+    - もし、当てはまるものがないと感じたら、「その他」を選択してください。
     
-    ### 氏名まわり
-    - 「姓」「苗字」「last name」 → "last_name"
-    - 「名」「first name」 → "first_name"
-    - 「お名前」「氏名」 で姓・名の分割がない → "name"
-    - 「フリガナ」「ふりがな」全体 → "name_kana"
-    - 「セイ」「姓(フリガナ)」 → "last_name_kana"
-    - 「メイ」「名(フリガナ)」 → "first_name_kana"
-    
-    ### 電話番号まわり
-    - 「会社電話番号」「代表番号」「会社の連絡先」など → "company_phone"
-    - 「携帯電話」「ご本人様の電話番号」「携帯番号」など → "personal_phone"
-    - 会社用か個人用か判別できない → "phone"
-    
-    ### 住所まわり
-    - 「郵便番号」「〒」のみ → "postal_code"
-    - 「都道府県」のみ → "prefecture"
-    - 市区町村・番地・建物名などの住所 → "address"
-    
-    ### お問い合わせ内容・種別
-    - 「お問い合わせ内容」「ご相談内容」「メッセージ本文」など → "body"
-    - 「お問い合わせ種別」「ご用件」「お問い合わせの種類」など → "category" または "inquiry_category"
-      - どちらを使ってもよいが、同じフォーム内では基本的にどちらか一方に統一すること。
-    
-    ### その他
-    - 「どこで当サイトを知りましたか」「当サイトを知ったきっかけ」 → "referral"
-    - 「性別」 → "gender"
-    - 「年齢」「ご年齢」 → "age"
-    - プライバシーポリシーは、全て、同意してください。
 
+    ### その他
+    - プライバシーポリシーは、全て、同意してください。
     
     ## 含めるべきフィールド / 無視するフィールド
     ### 含める（出力対象）
@@ -223,6 +191,9 @@ async function callFormAnalyzerModel(formHtml) {
     ## 実際の入力
     これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
     上記のルールに従って解析し、上記フォーマットどおりの JSON オブジェクトを 1 つだけ出力してください。
+
+    参考情報（入力候補のヒントに使ってよい）:
+    ${senderContext || '(なし)'}
     
     対象 HTML:
     
