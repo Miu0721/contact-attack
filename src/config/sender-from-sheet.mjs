@@ -1,5 +1,6 @@
 // src/config/sender-from-sheet.mjs
-import { google } from 'googleapis';
+import { createRequire } from 'module';
+const { google } = createRequire(import.meta.url)('googleapis'); // googleapis は CJS のため require を使用
 import 'dotenv/config';
 
 // Contacts と同じスプレッドシートIDを使う（1枚のシート運用に統一）
@@ -73,7 +74,7 @@ async function ensureFormLogSheetExists() {
 
 /**
  * Sender シートから自社情報を取得して、
- * { senderInfo, fixedMessage, companyTopUrl } を返す
+ * { senderInfo, message, companyTopUrl } を返す
  */
 export async function loadSenderFromSheet() {
   if (!SPREADSHEET_ID) {
@@ -106,73 +107,41 @@ export async function loadSenderFromSheet() {
 
   const senderInfo = {
     // フルネームが優先、無ければ姓+名の結合
-    name:
-      map.sender_name ||
-      `${map.sender_last_name || ''}${map.sender_first_name || ''}`.trim(),
-    nameKana:
-      map.sender_name_kana ||
-      `${map.sender_last_name_kana || ''}${map.sender_first_name_kana || ''}`.trim(),
-    lastName: map.sender_last_name || '',
-    firstName: map.sender_first_name || '',
-    lastNameKana: map.sender_last_name_kana || '',
-    firstNameKana: map.sender_first_name_kana || '',
-    title: map.sender_title || '',
-    companyPhone: map.sender_company_phone || '',
-    personalPhone: map.sender_personal_phone || '',
-    referral: map.sender_referral || '',
-    gender: map.sender_gender || '',
-    inquiryCategory: map.sender_inquiry_category || '',
-    postalCode: map.sender_postal_code || '',
-    prefecture: map.sender_prefecture || '',
-    address: map.sender_address || '',
-    age: map.sender_age || '',
-    email: map.sender_email || '',
-    company: map.sender_company || '',
-    department: map.sender_department || '',
-    phone: map.sender_phone || '',
+    name: map.name,
+    nameKana: map.nameKana,    
+    lastName: map.lastName,
+    firstName: map.firstName,
+    lastNameKana: map.lastNameKana,
+    firstNameKana: map.firstNameKana,
+    position: map.position,
+    companyPhone: map.companyPhone,
+    personalPhone: map.personalPhone,
+    referral: map.referral,
+    gender: map.gender,
+    inquiryCategory: map.inquiryCategory,
+    postalCode: map.postalCode,
+    prefecture: map.prefecture,
+    address: map.address,
+    age: map.age,
+    email: map.email,
+    company: map.company,
+    department: map.department,
+    phone: map.phone,
   };
+   
 
-  const fixedMessage = map.fixed_message || '';
-  const companyTopUrl = map.default_company_top_url || '';
-  const contactPrompt = map.contact_prompt || '';
+  const message = map.message;
+  const companyTopUrl = map.companyTopUrl;
+  const contactPrompt = map.contactPrompt;
 
   return {
     senderInfo,
-    fixedMessage,
+    message,
     companyTopUrl,
     contactPrompt,
   };
 }
 
-export function mergeSenderInfo(defaultInfo, overrideInfo = {}) {
-  const pick = (value, fallback) =>
-    value !== undefined && value !== null && String(value).trim() !== ''
-      ? value
-      : fallback;
-
-  return {
-    name: pick(overrideInfo.name, defaultInfo.name),
-    nameKana: pick(overrideInfo.nameKana, defaultInfo.nameKana),
-    lastName: pick(overrideInfo.lastName, defaultInfo.lastName),
-    firstName: pick(overrideInfo.firstName, defaultInfo.firstName),
-    lastNameKana: pick(overrideInfo.lastNameKana, defaultInfo.lastNameKana),
-    firstNameKana: pick(overrideInfo.firstNameKana, defaultInfo.firstNameKana),
-    title: pick(overrideInfo.title, defaultInfo.title),
-    companyPhone: pick(overrideInfo.companyPhone, defaultInfo.companyPhone),
-    personalPhone: pick(overrideInfo.personalPhone, defaultInfo.personalPhone),
-    referral: pick(overrideInfo.referral, defaultInfo.referral),
-    gender: pick(overrideInfo.gender, defaultInfo.gender),
-    inquiryCategory: pick(overrideInfo.inquiryCategory, defaultInfo.inquiryCategory),
-    postalCode: pick(overrideInfo.postalCode, defaultInfo.postalCode),
-    prefecture: pick(overrideInfo.prefecture, defaultInfo.prefecture),
-    address: pick(overrideInfo.address, defaultInfo.address),
-    age: pick(overrideInfo.age, defaultInfo.age),
-    email: pick(overrideInfo.email, defaultInfo.email),
-    company: pick(overrideInfo.company, defaultInfo.company),
-    department: pick(overrideInfo.department, defaultInfo.department),
-    phone: pick(overrideInfo.phone, defaultInfo.phone),
-  };
-}
 
 /**
  * フォームの質問項目と入力値を FormLogs シートに追記する

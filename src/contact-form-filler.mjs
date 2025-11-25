@@ -57,7 +57,7 @@ function selectorsForField(type, nameAttr, idAttr) {
   return selectors;
 }
 
-function valueForRole(role, senderInfo, fixedMessage) {
+function valueForRole(role, senderInfo, message) {
   if (role === 'name') return senderInfo.name || '';
   if (role === 'name_kana') return senderInfo.nameKana || '';
   if (role === 'first_name') return senderInfo.firstName || senderInfo.name || '';
@@ -70,14 +70,14 @@ function valueForRole(role, senderInfo, fixedMessage) {
   if (role === 'phone') return senderInfo.phone || '';
   if (role === 'company_phone') return senderInfo.companyPhone || senderInfo.phone || '';
   if (role === 'personal_phone') return senderInfo.personalPhone || senderInfo.phone || '';
-  if (role === 'title') return senderInfo.title || '';
+  if (role === 'position') return senderInfo.position || '';
   if (role === 'referral') return senderInfo.referral || '';
   if (role === 'gender') return senderInfo.gender || '';
   if (role === 'postal_code') return senderInfo.postalCode || '';
   if (role === 'prefecture') return senderInfo.prefecture || '';
   if (role === 'address') return senderInfo.address || '';
   if (role === 'age') return senderInfo.age || '';
-  if (role === 'body') return fixedMessage || '';
+  if (role === 'message') return message || '';
   if (role === 'category' || role === 'inquiry_category') {
     return senderInfo.inquiryCategory || CATEGORY_LABEL;
   }
@@ -347,9 +347,9 @@ async function fillTextField(page, selectors, value, meta, filledSummary) {
 /**
  * formSchema: analyzeContactFormWithAI が返す { fields: [...] }
  * senderInfo: { name, nameKana, email, company, department, phone }
- * fixedMessage: 本文
+ * message: 本文
  */
-export async function fillContactForm(page, formSchema, senderInfo, fixedMessage) {
+export async function fillContactForm(page, formSchema, senderInfo, message) {
   if (!formSchema || !Array.isArray(formSchema.fields)) {
     console.warn('fillContactForm: 無効な formSchema');
     return;
@@ -357,11 +357,13 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
 
   const filledSummary = [];
 
+  // reCAPTCHA など「私はロボットではありません」を検出してログに残す
   const recaptcha = await detectRecaptcha(page);
   if (recaptcha) {
     filledSummary.push(recaptcha);
   }
 
+  // reCAPTCHA など画像認証を検出してログに残す
   const imageCaptchas = await detectImageCaptchas(page);
   for (const info of imageCaptchas) {
     filledSummary.push({
@@ -383,6 +385,7 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
     const type = (f.type || 'text').toLowerCase();
     const label = f.label || '';
 
+    // roleがなければ、次のフィールドへ
     if (!role) continue;
 
     const selectors = selectorsForField(type, nameAttr, idAttr);
@@ -393,7 +396,7 @@ export async function fillContactForm(page, formSchema, senderInfo, fixedMessage
       continue;
     }
 
-    const value = valueForRole(role, senderInfo, fixedMessage);
+    const value = valueForRole(role, senderInfo, message);
     if (!value && type !== 'select' && type !== 'radio') continue;
 
     if (type === 'radio') {

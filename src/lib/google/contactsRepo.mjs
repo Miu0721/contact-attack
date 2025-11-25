@@ -1,5 +1,6 @@
 // src/lib/google/contactsRepo.mjs
-import { google } from 'googleapis';
+import { createRequire } from 'module';
+const { google } = createRequire(import.meta.url)('googleapis'); // googleapis は CJS のため require を使用
 import 'dotenv/config';
 
 // ---- 設定ここだけ意識すればOK ----------------------------------
