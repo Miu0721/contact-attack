@@ -1,13 +1,18 @@
 // src/lib/notion/applyTemplate.mjs
+export function applyTemplate(template, info, customMessage = '') {
+  const safeTemplate = template || '';
+  const replacements = {
+    company_name: info.company_name || '',
+    address: info.address || '',
+    tel: info.tel || '',
+    email: info.email || '',
+    sender: info.sender || '',
+    department: info.department || '',
+    custom_message: customMessage || '',
+  };
 
-export function applyTemplate(template, info, customMessage = "") {
-    return template
-      .replace(/{{company_name}}/g, info.company_name)
-      .replace(/{{address}}/g, info.address)
-      .replace(/{{tel}}/g, info.tel)
-      .replace(/{{email}}/g, info.email)
-      .replace(/{{sender}}/g, info.sender)
-      .replace(/{{department}}/g, info.department)
-      .replace(/{{custom_message}}/g, customMessage);
-  }
-  
+  return Object.entries(replacements).reduce(
+    (text, [key, value]) => text.replace(new RegExp(`{{${key}}}`, 'g'), value),
+    safeTemplate
+  );
+}

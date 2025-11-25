@@ -1,5 +1,6 @@
 // src/url-discovery.mjs
 import { openai } from './lib/openai.mjs';
+import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
 
 /** ルールベースで試すパス一覧 */
 const RULE_BASED_PATHS = [
@@ -38,6 +39,7 @@ const RULE_BASED_PATHS = [
   '/form/contact',
   '/company/contact',
 ];
+const USE_RULE_BASED = false;
 
 /** ベースURLと相対パスを合成 */
 function buildUrl(baseUrl, path) {
@@ -170,46 +172,13 @@ If none look like a contact page, return:
   });
   console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
 
-
-  // AIからの生テキスト抽出
-  let raw = '';
-
-  try {
-    if (typeof response.output_text === 'string') {
-      raw = response.output_text;
-    } else if (Array.isArray(response.output) && response.output.length > 0) {
-      const first = response.output[0];
-
-      if (Array.isArray(first.content) && first.content.length > 0) {
-        const c = first.content[0];
-
-        if (typeof c.text === 'string') {
-          raw = c.text;
-        } else if (c.text && typeof c.text.value === 'string') {
-          raw = c.text.value;
-        } else if (typeof c === 'string') {
-          raw = c;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('AI レスポンス抽出失敗:', e);
-  }
-
-  raw = (raw || '').trim();
+  const raw = extractTextFromResponse(response);
   console.log('🧠 Contact-link AI raw response:', raw);
-
   if (!raw) return [];
 
-  // { ... } の部分だけ抜き出す
-  const match = raw.match(/\{[\s\S]*\}/);
-  const jsonStr = match ? match[0] : raw;
-
-  let parsed;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (e) {
-    console.warn('AI JSON parse失敗:', jsonStr, e.message);
+  const parsed = parseJsonFromText(raw);
+  if (!parsed) {
+    console.warn('AI JSON parse失敗:', raw);
     return [];
   }
 
@@ -247,12 +216,14 @@ export async function findContactPageCandidates(page, companyTopUrl, userPrompt)
 
   const candidates = [];
 
-  // ルールベース探索は現在無効化（AI のみ使用）
-  const ruleHits = [];
+  const ruleHits = USE_RULE_BASED
+    ? await collectRuleBasedContactUrls(page, companyTopUrl)
+    : [];
+  candidates.push(...ruleHits);
 
   // AI 判定は最新のTOPで実行
   await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
-  const aiHits = await tryAIContactUrl(page, companyTopUrl, userPrompt);
+  const aiHits = (await tryAIContactUrl(page, companyTopUrl, userPrompt)) || [];
   candidates.push(...aiHits);
 
   // 重複除去
