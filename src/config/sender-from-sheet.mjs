@@ -142,35 +142,35 @@ export async function loadSenderFromSheet() {
   };
 }
 
-export function mergeSenderInfo(defaultInfo, overrideInfo = {}) {
-  const pick = (value, fallback) =>
-    value !== undefined && value !== null && String(value).trim() !== ''
-      ? value
-      : fallback;
+// export function mergeSenderInfo(defaultInfo, overrideInfo = {}) {
+//   const pick = (value, fallback) =>
+//     value !== undefined && value !== null && String(value).trim() !== ''
+//       ? value
+//       : fallback;
 
-  return {
-    name: pick(overrideInfo.name, defaultInfo.name),
-    nameKana: pick(overrideInfo.nameKana, defaultInfo.nameKana),
-    lastName: pick(overrideInfo.lastName, defaultInfo.lastName),
-    firstName: pick(overrideInfo.firstName, defaultInfo.firstName),
-    lastNameKana: pick(overrideInfo.lastNameKana, defaultInfo.lastNameKana),
-    firstNameKana: pick(overrideInfo.firstNameKana, defaultInfo.firstNameKana),
-    position: pick(overrideInfo.position, defaultInfo.position),
-    companyPhone: pick(overrideInfo.companyPhone, defaultInfo.companyPhone),
-    personalPhone: pick(overrideInfo.personalPhone, defaultInfo.personalPhone),
-    referral: pick(overrideInfo.referral, defaultInfo.referral),
-    gender: pick(overrideInfo.gender, defaultInfo.gender),
-    inquiryCategory: pick(overrideInfo.inquiryCategory, defaultInfo.inquiryCategory),
-    postalCode: pick(overrideInfo.postalCode, defaultInfo.postalCode),
-    prefecture: pick(overrideInfo.prefecture, defaultInfo.prefecture),
-    address: pick(overrideInfo.address, defaultInfo.address),
-    age: pick(overrideInfo.age, defaultInfo.age),
-    email: pick(overrideInfo.email, defaultInfo.email),
-    company: pick(overrideInfo.company, defaultInfo.company),
-    department: pick(overrideInfo.department, defaultInfo.department),
-    phone: pick(overrideInfo.phone, defaultInfo.phone),
-  };
-}
+//   return {
+//     name: pick(overrideInfo.name, defaultInfo.name),
+//     nameKana: pick(overrideInfo.nameKana, defaultInfo.nameKana),
+//     lastName: pick(overrideInfo.lastName, defaultInfo.lastName),
+//     firstName: pick(overrideInfo.firstName, defaultInfo.firstName),
+//     lastNameKana: pick(overrideInfo.lastNameKana, defaultInfo.lastNameKana),
+//     firstNameKana: pick(overrideInfo.firstNameKana, defaultInfo.firstNameKana),
+//     position: pick(overrideInfo.position, defaultInfo.position),
+//     companyPhone: pick(overrideInfo.companyPhone, defaultInfo.companyPhone),
+//     personalPhone: pick(overrideInfo.personalPhone, defaultInfo.personalPhone),
+//     referral: pick(overrideInfo.referral, defaultInfo.referral),
+//     gender: pick(overrideInfo.gender, defaultInfo.gender),
+//     inquiryCategory: pick(overrideInfo.inquiryCategory, defaultInfo.inquiryCategory),
+//     postalCode: pick(overrideInfo.postalCode, defaultInfo.postalCode),
+//     prefecture: pick(overrideInfo.prefecture, defaultInfo.prefecture),
+//     address: pick(overrideInfo.address, defaultInfo.address),
+//     age: pick(overrideInfo.age, defaultInfo.age),
+//     email: pick(overrideInfo.email, defaultInfo.email),
+//     company: pick(overrideInfo.company, defaultInfo.company),
+//     department: pick(overrideInfo.department, defaultInfo.department),
+//     phone: pick(overrideInfo.phone, defaultInfo.phone),
+//   };
+// }
 
 /**
  * フォームの質問項目と入力値を FormLogs シートに追記する
