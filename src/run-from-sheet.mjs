@@ -11,6 +11,7 @@ import { SENDER_INFO, FIXED_MESSAGE } from './config/sender.mjs';
 import {
   loadSenderFromSheet,
   appendFormQuestionsAndAnswers,
+  mergeSenderInfo,
 } from './config/sender-from-sheet.mjs';
 
 import {
@@ -20,6 +21,14 @@ import {
 } from './lib/google/contactsRepo.mjs';
 
 // import { notifySlack } from './lib/slack.mjs';
+
+async function appendFormLogSafe(params) {
+  try {
+    await appendFormQuestionsAndAnswers(params);
+  } catch (logErr) {
+    console.warn('⚠️ フォーム質問ログの書き込みに失敗:', logErr?.message || logErr);
+  }
+}
 
 (async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
@@ -34,29 +43,7 @@ import {
   // シートからの senderInfo（なければ空オブジェクト）
   const sheetSender = senderFromSheet?.senderInfo || {};
 
-  // フィールドごとに「シート優先、なければ sender.mjs の値」
-  const senderInfo = {
-    name: sheetSender.name || SENDER_INFO.name,
-    nameKana: sheetSender.nameKana || SENDER_INFO.nameKana,
-    lastName: sheetSender.lastName || SENDER_INFO.lastName,
-    firstName: sheetSender.firstName || SENDER_INFO.firstName,
-    lastNameKana: sheetSender.lastNameKana || SENDER_INFO.lastNameKana,
-    firstNameKana: sheetSender.firstNameKana || SENDER_INFO.firstNameKana,
-    title: sheetSender.title || SENDER_INFO.title,
-    companyPhone: sheetSender.companyPhone || SENDER_INFO.companyPhone,
-    personalPhone: sheetSender.personalPhone || SENDER_INFO.personalPhone,
-    referral: sheetSender.referral || SENDER_INFO.referral,
-    gender: sheetSender.gender || SENDER_INFO.gender,
-    inquiryCategory: sheetSender.inquiryCategory || SENDER_INFO.inquiryCategory,
-    postalCode: sheetSender.postalCode || SENDER_INFO.postalCode,
-    prefecture: sheetSender.prefecture || SENDER_INFO.prefecture,
-    address: sheetSender.address || SENDER_INFO.address,
-    age: sheetSender.age || SENDER_INFO.age,
-    email: sheetSender.email || SENDER_INFO.email,
-    company: sheetSender.company || SENDER_INFO.company,
-    department: sheetSender.department || SENDER_INFO.department,
-    phone: sheetSender.phone || SENDER_INFO.phone,
-  };
+  const senderInfo = mergeSenderInfo(SENDER_INFO, sheetSender);
 
   const fixedMessage =
     senderFromSheet?.fixedMessage &&
@@ -175,20 +162,13 @@ import {
           lastErrorMsg = 'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
           status = 'Failed';
 
-          try {
-            await appendFormQuestionsAndAnswers({
-              contact,
-              contactUrl,
-              siteUrl: contact.siteUrl,
-              filledSummary,
-              formSchema,
-            });
-          } catch (logErr) {
-            console.warn(
-              '⚠️ フォーム質問ログの書き込みに失敗:',
-              logErr?.message || logErr
-            );
-          }
+          await appendFormLogSafe({
+            contact,
+            contactUrl,
+            siteUrl: contact.siteUrl,
+            filledSummary,
+            formSchema,
+          });
 
           // 次のリンク/企業へ
           success = true; // これ以上のエラー通知を避けるため success として扱う
@@ -204,20 +184,13 @@ import {
 
         success = true;
 
-        try {
-          await appendFormQuestionsAndAnswers({
-            contact,
-            contactUrl,
-            siteUrl: contact.siteUrl,
-            filledSummary,
-            formSchema,
-          });
-        } catch (logErr) {
-          console.warn(
-            '⚠️ フォーム質問ログの書き込みに失敗:',
-            logErr?.message || logErr
-          );
-        }
+        await appendFormLogSafe({
+          contact,
+          contactUrl,
+          siteUrl: contact.siteUrl,
+          filledSummary,
+          formSchema,
+        });
 
         lastResult = 'filled';
         status = 'Success';

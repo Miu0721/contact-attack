@@ -15,14 +15,16 @@ export async function getCompanyInfo() {
   }
 
   const props = res.results[0].properties;
+  const getRichText = (key) => props[key]?.rich_text?.map((t) => t.plain_text).join('') ?? '';
+  const getTitle = (key) => props[key]?.title?.[0]?.plain_text ?? '';
 
   return {
-    company_name: props["Company Name"]?.title[0]?.plain_text ?? "",
-    address: props["Address"]?.rich_text[0]?.plain_text ?? "",
-    tel: props["TEL"]?.rich_text[0]?.plain_text ?? "",
-    email: props["Email"]?.email ?? "",
-    sender: props["Sender"]?.rich_text[0]?.plain_text ?? "",
-    department: props["Department"]?.rich_text[0]?.plain_text ?? "",
-    template: props["Template"]?.rich_text?.map(t => t.plain_text).join("") ?? "",
+    company_name: getTitle('Company Name'),
+    address: getRichText('Address'),
+    tel: getRichText('TEL'),
+    email: props['Email']?.email ?? '',
+    sender: getRichText('Sender'),
+    department: getRichText('Department'),
+    template: getRichText('Template'),
   };
 }

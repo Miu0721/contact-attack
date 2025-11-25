@@ -1,5 +1,6 @@
 // src/contact-form-analyzer.mjs
 import { openai } from './lib/openai.mjs';
+import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
 
 /**
  * 公開関数：
@@ -11,8 +12,6 @@ export async function analyzeContactFormWithAI(page) {
   if (!result) {
     console.warn('iframe を含めてもフォーム入力フィールドが見つかりませんでした');
   }
-  console.log('analyzeContactFormWithAIのところ')
-  console.log(JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -21,12 +20,7 @@ export async function analyzeContactFormWithAI(page) {
  * ctx: Playwright の Page または Frame
  */
 async function analyzeInContext(ctx, isRoot = false) {
-  // JSレンダリング待ち
-  if (isRoot) {
-    await ctx.waitForTimeout(2000);
-  } else {
-    await ctx.waitForTimeout(1000);
-  }
+  await ctx.waitForTimeout(isRoot ? 2000 : 1000);
 
   // 何かしら出てくるのを一旦待つ
   await ctx
@@ -97,9 +91,7 @@ async function analyzeInContext(ctx, isRoot = false) {
  */
 async function callFormAnalyzerModel(formHtml) {
   console.log('formHtml length:', formHtml.length);
-  console.log(formHtml.slice(0, 500));
-  console.log('--- tail ---');
-  console.log(formHtml.slice(-500));
+
   const MAX_LEN = 80000;
   const trimmedHtml =
     formHtml.length > MAX_LEN ? formHtml.slice(0, MAX_LEN) : formHtml;
@@ -241,8 +233,8 @@ async function callFormAnalyzerModel(formHtml) {
   const response = await openai.responses.create({
     model: 'gpt-5-nano',
     input: prompt,
-    max_output_tokens: 15000,        // 少し多めに確保
-    reasoning: { effort: 'low' },  // reasoning を抑えてテキストを出させる
+    max_output_tokens: 15000, // 少し多めに確保
+    reasoning: { effort: 'low' }, // reasoning を抑えてテキストを出させる
   });
 
   console.log('📦 Form AI meta (debug):', {
@@ -251,9 +243,7 @@ async function callFormAnalyzerModel(formHtml) {
     usage: response.usage,
   });
 
-  // シンプルに output_text だけを見る
-  let raw = (response.output_text || '').trim();
-
+  const raw = extractTextFromResponse(response);
   console.log('🧠 Form AI raw response:', raw);
 
   if (!raw) {
@@ -261,73 +251,73 @@ async function callFormAnalyzerModel(formHtml) {
     return null;
   }
 
-  // { ... } だけ抜き出して JSON.parse
-  const match = raw.match(/\{[\s\S]*\}/);
-  let jsonStr = match ? match[0] : raw;
+  const parsedDirect = parseJsonFromText(raw);
+  const jsonStr = raw;
 
-  let parsed;
-  try {
-    // まずは素直に JSON.parse を試す
-    parsed = JSON.parse(jsonStr);
-  } catch (e) {
-    console.warn('フォームAI JSON parse失敗 (1st):', jsonStr);
+  let parsed = parsedDirect;
+  if (!parsed) {
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (e) {
+      console.warn('フォームAI JSON parse失敗 (1st):', jsonStr);
 
-    // ★ フォールバック：
-    // "fields": [ ... ] の JSON 部分だけを抜き出してパース
-    const fields = [];
+      // ★ フォールバック：
+      // "fields": [ ... ] の JSON 部分だけを抜き出してパース
+      const fields = [];
 
-    // 1) "fields" の配列部分を抽出（ブラケットの対応を見てスライス）
-    const fieldsIdx = jsonStr.indexOf('"fields"');
-    if (fieldsIdx !== -1) {
-      const startBracket = jsonStr.indexOf('[', fieldsIdx);
-      if (startBracket !== -1) {
-        let depth = 0;
-        let endIdx = -1;
-        for (let i = startBracket; i < jsonStr.length; i += 1) {
-          const ch = jsonStr[i];
-          if (ch === '[') depth += 1;
-          else if (ch === ']') {
-            depth -= 1;
-            if (depth === 0) {
-              endIdx = i;
-              break;
-            }
-          }
-        }
-
-        if (endIdx !== -1) {
-          const arrText = jsonStr.slice(startBracket, endIdx + 1);
-          try {
-            const parsedFields = JSON.parse(arrText);
-            if (Array.isArray(parsedFields)) {
-              for (const f of parsedFields) {
-                if (f && typeof f === 'object') fields.push(f);
+      // 1) "fields" の配列部分を抽出（ブラケットの対応を見てスライス）
+      const fieldsIdx = jsonStr.indexOf('"fields"');
+      if (fieldsIdx !== -1) {
+        const startBracket = jsonStr.indexOf('[', fieldsIdx);
+        if (startBracket !== -1) {
+          let depth = 0;
+          let endIdx = -1;
+          for (let i = startBracket; i < jsonStr.length; i += 1) {
+            const ch = jsonStr[i];
+            if (ch === '[') depth += 1;
+            else if (ch === ']') {
+              depth -= 1;
+              if (depth === 0) {
+                endIdx = i;
+                break;
               }
             }
-          } catch (_ignore) {
-            // 2) 個別オブジェクトを拾うフォールバック
-            const body = jsonStr.slice(startBracket + 1, endIdx);
-            const objectMatches = body.match(/\{[^{}]*\}/g) || [];
-            for (const objText of objectMatches) {
-              try {
-                const fieldObj = JSON.parse(objText);
-                fields.push(fieldObj);
-              } catch (_ignore2) {
-                // 破損行は無視
+          }
+
+          if (endIdx !== -1) {
+            const arrText = jsonStr.slice(startBracket, endIdx + 1);
+            try {
+              const parsedFields = JSON.parse(arrText);
+              if (Array.isArray(parsedFields)) {
+                for (const f of parsedFields) {
+                  if (f && typeof f === 'object') fields.push(f);
+                }
+              }
+            } catch (_ignore) {
+              // 2) 個別オブジェクトを拾うフォールバック
+              const body = jsonStr.slice(startBracket + 1, endIdx);
+              const objectMatches = body.match(/\{[^{}]*\}/g) || [];
+              for (const objText of objectMatches) {
+                try {
+                  const fieldObj = JSON.parse(objText);
+                  fields.push(fieldObj);
+                } catch (_ignore2) {
+                  // 破損行は無視
+                }
               }
             }
           }
         }
       }
-    }
 
-    if (!fields.length) {
-      console.warn('フォームAI JSON parse失敗 (fallbackも失敗):', jsonStr);
-      return null;
-    }
+      if (!fields.length) {
+        console.warn('フォームAI JSON parse失敗 (fallbackも失敗):', jsonStr);
+        return null;
+      }
 
-    console.log(`🧩 Fallback で ${fields.length} 個の field を復元しました`);
-    parsed = { fields };
+      console.log(`🧩 Fallback で ${fields.length} 個の field を復元しました`);
+      parsed = { fields };
+    }
   }
 
   if (!parsed || !Array.isArray(parsed.fields)) {
