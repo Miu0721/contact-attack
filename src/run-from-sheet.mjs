@@ -171,6 +171,10 @@ async function appendFormLogSafe(params) {
             senderInfo,
             message
           )) || [];
+        console.log(
+          '🧾 filledSummary:',
+          JSON.stringify(filledSummary, null, 2)
+        );
 
         // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
         const captchaEntry = filledSummary.find(

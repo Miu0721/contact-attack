@@ -14,6 +14,31 @@ const FORM_LOG_SHEET_NAME =
 let sheetsClient = null;
 let formLogSheetChecked = false;
 
+function collapseLogicalFields(entries = []) {
+  const seen = new Set();
+  const result = [];
+
+  for (const item of entries) {
+    const isGroupTarget =
+      item.type === 'radio' || item.type === 'checkbox';
+
+    if (isGroupTarget) {
+      const hasAttr = item.nameAttr || item.idAttr;
+      const groupKey = hasAttr
+        ? item.nameAttr || item.idAttr
+        : 'NO_ATTR_GROUP'; // name/id が無い連続チェックボックスは1つにまとめる
+      const key = `${item.type}|${groupKey}`;
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+
+    result.push(item);
+  }
+
+  return result;
+}
+
 /**
  * Google Sheets クライアントを作成（Contacts と同じ認証方式）
  */
@@ -119,6 +144,7 @@ export async function loadSenderFromSheet() {
     referral: map.referral,
     gender: map.gender,
     inquiryCategory: map.inquiryCategory,
+    subject: map.subject,
     postalCode: map.postalCode,
     prefecture: map.prefecture,
     address: map.address,
@@ -178,13 +204,15 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
           order: idx + 1,
         }))) || [];
 
-  if (!entries.length) {
+  const normalizedEntries = collapseLogicalFields(entries);
+
+  if (!normalizedEntries.length) {
     console.warn('appendFormQuestionsAndAnswers: ログ対象の項目がありません');
     return;
   }
 
   const timestamp = new Date().toISOString();
-  const rows = entries.map((item, idx) => [
+  const rows = normalizedEntries.map((item, idx) => [
     timestamp,
     contact?.companyName || '',
     contact?.rowIndex || '',
@@ -204,9 +232,22 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     await ensureFormLogSheetExists();
 
     const sheets = await getSheets();
-    await sheets.spreadsheets.values.append({
+    // append が横方向にずれることを避けるため、自前で最終行+1を計算して update する
+    const existing = await sheets.spreadsheets.values
+      .get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${FORM_LOG_SHEET_NAME}!A:A`,
+      })
+      .catch(() => ({ data: { values: [] } }));
+
+    const startRow =
+      (existing.data.values && existing.data.values.length) || 0;
+    const startIndex = startRow + 1; // 1-based
+    const endIndex = startIndex + rows.length - 1;
+
+    await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${FORM_LOG_SHEET_NAME}!A:M`,
+      range: `${FORM_LOG_SHEET_NAME}!A${startIndex}:M${endIndex}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: rows,
