@@ -172,7 +172,11 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
   const entries =
     (filledSummary && filledSummary.length > 0
       ? filledSummary
-      : (formSchema?.fields || []).map((f) => ({ ...f, value: '' }))) || [];
+      : (formSchema?.fields || []).map((f, idx) => ({
+          ...f,
+          value: '',
+          order: idx + 1,
+        }))) || [];
 
   if (!entries.length) {
     console.warn('appendFormQuestionsAndAnswers: ログ対象の項目がありません');
@@ -180,7 +184,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
   }
 
   const timestamp = new Date().toISOString();
-  const rows = entries.map((item) => [
+  const rows = entries.map((item, idx) => [
     timestamp,
     contact?.companyName || '',
     contact?.rowIndex || '',
@@ -192,6 +196,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     item.nameAttr || '',
     item.idAttr || '',
     item.selector || '',
+    item.order != null ? item.order : idx + 1,
     item.value != null ? String(item.value) : '',
   ]);
 
@@ -201,7 +206,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     const sheets = await getSheets();
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${FORM_LOG_SHEET_NAME}!A:L`,
+      range: `${FORM_LOG_SHEET_NAME}!A:M`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: rows,

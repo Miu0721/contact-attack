@@ -88,7 +88,7 @@ async function detectRecaptcha(page) {
   for (const sel of RECAPTCHA_SELECTORS) {
     const handle = await page.$(sel);
     if (handle) {
-      console.log('🛡️ reCAPTCHA/anti-bot 要素を検出:', sel);
+      console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
       return {
         role: 'captcha',
         type: 'recaptcha',
@@ -356,11 +356,12 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   }
 
   const filledSummary = [];
+  let orderCounter = 1;
 
   // reCAPTCHA など「私はロボットではありません」を検出してログに残す
   const recaptcha = await detectRecaptcha(page);
   if (recaptcha) {
-    filledSummary.push(recaptcha);
+    filledSummary.push({ ...recaptcha, order: 0 });
   }
 
   // reCAPTCHA など画像認証を検出してログに残す
@@ -373,6 +374,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       label: info.label,
       nameAttr: info.nameAttr,
       idAttr: info.idAttr,
+      order: 0,
       value: 'manual_action_required',
     });
     console.log('🛡️ 画像認証/キャプチャ入力欄を検出:', info.selector);
@@ -389,7 +391,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
     if (!role) continue;
 
     const selectors = selectorsForField(type, nameAttr, idAttr);
-    const meta = { role, type, label, nameAttr, idAttr };
+    const meta = { role, type, label, nameAttr, idAttr, order: orderCounter++ };
 
     if (type === 'checkbox') {
       await fillCheckbox(page, selectors, meta, filledSummary);

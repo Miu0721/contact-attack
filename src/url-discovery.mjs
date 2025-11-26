@@ -94,6 +94,20 @@ async function tryAIContactUrl(page, companyTopUrl, userPrompt) {
     }
   }
 
+  // ハンバーガーメニューがあれば開く（失敗しても無視）
+  // for (const sel of HAMBURGER_SELECTORS) {
+  //   try {
+  //     const locator = page.locator(sel).first();
+  //     if (await locator.count()) {
+  //       await locator.click({ timeout: 1500 }).catch(() => locator.press('Enter').catch(() => {}));
+  //       await page.waitForTimeout(500);
+  //       break;
+  //     }
+  //   } catch (_err) {
+  //     // ignore and try next selector
+  //   }
+  // }
+
   // ページ内の a タグ（リンク）を全部収集
   const rawLinks = await page.$$eval('a', (as) =>
     as.map((a) => ({
@@ -134,7 +148,7 @@ async function tryAIContactUrl(page, companyTopUrl, userPrompt) {
   console.log('🔗 AI判定用リンク候補数(フィルタ後):', links.length);
 
   // 多すぎるとAIが大変なので50件まで
-  const linksForAI = links.slice(0, 50);
+  const linksForAI = links.slice(0, 100); // 上限を100件に拡大
   console.log('🔗 AI に渡すリンク数:', linksForAI.length);
   console.log('🔗 サンプルリンク:', linksForAI.slice(0, 5));
 
