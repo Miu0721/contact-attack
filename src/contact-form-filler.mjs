@@ -78,6 +78,9 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'address') return senderInfo.address || '';
   if (role === 'age') return senderInfo.age || '';
   if (role === 'message') return message || '';
+  if (role === 'subject') return senderInfo.subject || '';
+  if (role === 'organization') return senderInfo.company || senderInfo.organization || '';
+  if (role === 'company_name') return senderInfo.company || '';
   if (role === 'category' || role === 'inquiry_category') {
     return senderInfo.inquiryCategory || CATEGORY_LABEL;
   }
