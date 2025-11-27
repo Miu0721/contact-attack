@@ -21,12 +21,13 @@ export async function analyzeContactFormWithAI(page, senderInfo = {}, message = 
  * コンタクトページにある　フォームを解析して、全てのタグを返す関数。
  */
 async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = '') {
-  await ctx.waitForTimeout(isRoot ? 2000 : 1000);
+  // ページ内リソース読み込みの遅延に備え、待機時間を長めに確保
+  await ctx.waitForTimeout(isRoot ? 4000 : 2000);
 
   // 何かしら出てくるのを一旦待つ
   await ctx
     .waitForSelector('form, input, textarea, select, iframe', {
-      timeout: 8000,
+      timeout: 30000,
     })
     .catch(() => {});
 
@@ -204,7 +205,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
 
   
   const response = await openai.responses.create({
-    model: 'gpt-5-nano',
+    model: 'gpt-5-mini',
     input: prompt,
     max_output_tokens: 15000, // 少し多めに確保
     reasoning: { effort: 'low' }, // reasoning を抑えてテキストを出させる
