@@ -90,8 +90,10 @@ async function appendFormLogSafe(params) {
       // 1. サイトURLをContactsシートから取得
       const baseUrl = contact.siteUrl || contact.contactUrl;
       if (!baseUrl) {
-        throw new Error('Site URL / Contact URL が両方空です');
+        console.warn('Site URL / Contact URL が両方空です。処理を終了します。');
+        return; // 関数の処理終了
       }
+      
 
       // 候補URLを取得（指定済み contactUrl を優先、無ければ探索）
       const candidateUrls = contactUrl
