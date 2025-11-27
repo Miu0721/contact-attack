@@ -186,7 +186,7 @@ If none look like a contact page, return:
   });
   // console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
 
-  const raw = extractTextßßFromResponse(response);
+  const raw = extractTextFromResponse(response);
   // console.log('🧠 Contact-link AI raw response:', raw);
   if (!raw) return [];
 

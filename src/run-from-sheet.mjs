@@ -90,8 +90,10 @@ async function appendFormLogSafe(params) {
       // 1. サイトURLをContactsシートから取得
       const baseUrl = contact.siteUrl || contact.contactUrl;
       if (!baseUrl) {
-        throw new Error('Site URL / Contact URL が両方空です');
+        console.warn('Site URL / Contact URL が両方空です。処理を終了します。');
+        return; // 関数の処理終了
       }
+      
 
       // 候補URLを取得（指定済み contactUrl を優先、無ければ探索）
       const candidateUrls = contactUrl
@@ -173,28 +175,28 @@ async function appendFormLogSafe(params) {
           JSON.stringify(filledSummary, null, 2)
         );
 
-        // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
-        const captchaEntry = filledSummary.find(
-          (f) => f.role === 'captcha'
-        );
-        if (captchaEntry) {
-          lastResult = 'captcha_detected';
-          lastErrorMsg =
-            'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
-          status = 'Failed';
+        // // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
+        // const captchaEntry = filledSummary.find(
+        //   (f) => f.role === 'captcha'
+        // );
+        // if (captchaEntry) {
+        //   lastResult = 'captcha_detected';
+        //   lastErrorMsg =
+        //     'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
+        //   status = 'Failed';
 
-          await appendFormLogSafe({
-            contact,
-            contactUrl,
-            siteUrl: contact.siteUrl,
-            filledSummary,
-            formSchema,
-          });
+        //   await appendFormLogSafe({
+        //     contact,
+        //     contactUrl,
+        //     siteUrl: contact.siteUrl,
+        //     filledSummary,
+        //     formSchema,
+        //   });
 
-          // 次のリンク/企業へ
-          success = true; // これ以上のエラー通知を避けるため success として扱う
-          break;
-        }
+        //   // 次のリンク/企業へ
+        //   success = true; // これ以上のエラー通知を避けるため success として扱う
+        //   break;
+        // }
 
         if (filledSummary.length === 0) {
           console.warn('⚠️ 入力サマリが空でした');

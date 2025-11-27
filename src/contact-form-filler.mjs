@@ -2,13 +2,13 @@
 
 // 「お問い合わせ種別」で選びたいラベル
 const CATEGORY_LABEL = '案件のご依頼';
-const RECAPTCHA_SELECTORS = [
-  'iframe[src*="google.com/recaptcha"]',
-  'div.g-recaptcha',
-  'div.recaptcha',
-  'input[aria-label*="not a robot" i]',
-  'input[aria-label*="ロボットではありません"]',
-];
+// const RECAPTCHA_SELECTORS = [
+//   'iframe[src*="google.com/recaptcha"]',
+//   'div.g-recaptcha',
+//   'div.recaptcha',
+//   'input[aria-label*="not a robot" i]',
+//   'input[aria-label*="ロボットではありません"]',
+// ];
 
 const IMAGE_CAPTCHA_KEYWORDS = [
   'captcha',
@@ -87,24 +87,24 @@ function valueForRole(role, senderInfo, message) {
   return '';
 }
 
-async function detectRecaptcha(page) {
-  for (const sel of RECAPTCHA_SELECTORS) {
-    const handle = await page.$(sel);
-    if (handle) {
-      console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
-      return {
-        role: 'captcha',
-        type: 'recaptcha',
-        selector: sel,
-        label: 'reCAPTCHA detected',
-        nameAttr: '',
-        idAttr: '',
-        value: 'manual_action_required',
-      };
-    }
-  }
-  return null;
-}
+// async function detectRecaptcha(page) {
+//   for (const sel of RECAPTCHA_SELECTORS) {
+//     const handle = await page.$(sel);
+//     if (handle) {
+//       console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
+//       return {
+//         role: 'captcha',
+//         type: 'recaptcha',
+//         selector: sel,
+//         label: 'reCAPTCHA detected',
+//         nameAttr: '',
+//         idAttr: '',
+//         value: 'manual_action_required',
+//       };
+//     }
+//   }
+//   return null;
+// }
 
 async function detectImageCaptchas(page) {
   try {
@@ -361,11 +361,11 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   const filledSummary = [];
   let orderCounter = 1;
 
-  // reCAPTCHA など「私はロボットではありません」を検出してログに残す
-  const recaptcha = await detectRecaptcha(page);
-  if (recaptcha) {
-    filledSummary.push({ ...recaptcha, order: 0 });
-  }
+  // // reCAPTCHA など「私はロボットではありません」を検出してログに残す
+  // const recaptcha = await detectRecaptcha(page);
+  // if (recaptcha) {
+  //   filledSummary.push({ ...recaptcha, order: 0 });
+  // }
 
   // reCAPTCHA など画像認証を検出してログに残す
   const imageCaptchas = await detectImageCaptchas(page);
