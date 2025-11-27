@@ -184,10 +184,10 @@ If none look like a contact page, return:
     input: prompt,
     max_output_tokens: 20000,
   });
-  console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
+  // console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
 
-  const raw = extractTextFromResponse(response);
-  console.log('🧠 Contact-link AI raw response:', raw);
+  const raw = extractTextßßFromResponse(response);
+  // console.log('🧠 Contact-link AI raw response:', raw);
   if (!raw) return [];
 
   const parsed = parseJsonFromText(raw);
