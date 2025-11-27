@@ -158,10 +158,7 @@ async function appendFormLogSafe(params) {
           continue;
         }
 
-        console.log(
-          '🧾 form schema:',
-          JSON.stringify(formSchema, null, 2)
-        );
+
 
         // AIの解析をもとに、フォームを入力
         filledSummary =
