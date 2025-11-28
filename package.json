@@ -16,6 +16,7 @@
   "dependencies": {
     "@notionhq/client": "^5.4.0",
     "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "googleapis": "^166.0.0",
     "openai": "^6.9.1",
     "playwright": "^1.56.1",
