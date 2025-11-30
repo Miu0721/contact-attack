@@ -108,8 +108,22 @@ export async function crawlSiteForContact(page, startUrl, options = {}) {
       .filter((l) => !!l)
       .filter((l) => {
         const o = normalizeOrigin(l.href);
-        return !!o && o === baseOrigin; // ★ 正規化された origin 同士で比較
+        const sameOrigin = !!o && o === baseOrigin;
+    
+        // テキスト＋URL をまとめてチェック
+        const t = `${l.text || ''} ${l.href || ''}`.toLowerCase();
+        const looksLikeContact = /お問い合わせ|お問合せ|contact|inquiry|support/.test(t);
+    
+        // 🔹1. 同一originなら無条件でOK
+        if (sameOrigin) return true;
+    
+        // 🔹2. originは違うが「問い合わせっぽい」リンクなら候補に残す
+        if (looksLikeContact) return true;
+    
+        // 🔹3. その他の外部ドメインは除外
+        return false;
       });
+    
 
     // 収集 & 次のクロール対象としてキューへ
     for (const l of links) {
