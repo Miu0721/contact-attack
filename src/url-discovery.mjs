@@ -1,164 +1,205 @@
-// src/url-discovery.mjs
 import { openai } from './lib/openai.mjs';
 import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
 
-/** ルールベースで試すパス一覧 */
-const RULE_BASED_PATHS = [
-  // contact系
-  '/contact',
-  '/contact/',
-  '/contact.html',
-  '/contact/index.html',
+// 問い合わせページらしさをスコアリングする関数
+function scoreLinkForContact(link) {
+  const text = link.text || '';
+  const href = link.href || '';
+  const t = `${text} ${href}`.toLowerCase();
+  let score = 0;
 
-  '/contact-us',
-  '/contact-us/',
-  '/contact-us.html',
-  '/contact-us/index.html',
+  // ✅ 最優先：問い合わせ系ワード
+  if (t.match(/お問い合わせ|お問合せ|お問合わせ|お問い合せ/)) score += 15;
+  if (t.match(/\bcontact\b|\bcontact us\b|inquiry|support/)) score += 12;
+  if (t.match(/フォーム|form/)) score += 4;
+  if (t.match(/資料請求|ご相談|ご連絡/)) score += 6;
 
-  // inquiry系
-  '/inquiry',
-  '/inquiry/',
-  '/inquiry.html',
-  '/inquiry/index.html',
+  // ✅ URL に contact / inquiry / support が入っていたら激アツ
+  if (t.includes('/contact')) score += 20;
+  if (t.includes('/inquiry')) score += 15;
+  if (t.includes('/support')) score += 8;
+  if (t.includes('/pages/contact')) score += 25; // Shopify系対策
 
-  // support系
-  '/support',
-  '/support/',
-  '/support.html',
-  '/support/index.html',
+  // ❌ 明確に除外したいもの
+  if (t.match(/recruit|career|job|採用|求人/)) score -= 15;
+  if (t.match(/privacy|ポリシー|規約|terms|利用規約/)) score -= 12;
+  if (t.match(/about|会社概要|企業情報|corporate/)) score -= 8;
+  if (t.match(/news|blog|press|ir|お知らせ/)) score -= 6;
+  if (t.match(/login|ログイン|マイページ|mypage|会員登録|register|signup/)) score -= 10;
+  if (t.match(/cart|カート|basket/)) score -= 10;
 
-  // 日本語
-  '/お問い合わせ',
-  '/お問い合わせ/',
-  '/お問い合わせ.html',
-  '/お問い合わせ/index.html',
+  // ❌ 検索・商品一覧・カテゴリっぽい URL は下げる
+  if (t.includes('/search?') || t.includes('q=')) score -= 15;
+  if (t.includes('/collections/')) score -= 10;
+  if (t.includes('/items/list')) score -= 10;
 
-  // よくある追加パターン
-  '/contact-form',
-  '/contact-form/',
-  '/form/contact',
-  '/company/contact',
-];
-const USE_RULE_BASED = false;
+  // ❌ SNS
+  if (t.match(/twitter\.com|x\.com|facebook\.com|instagram\.com|line\.me|youtube\.com/)) {
+    score -= 20;
+  }
 
-/** ベースURLと相対パスを合成 */
-function buildUrl(baseUrl, path) {
-  const u = new URL(baseUrl);
-  if (path.startsWith('/')) return `${u.origin}${path}`;
-  return `${u.origin}/${path}`;
+  // 深さも少しだけ考慮（深いほどちょっと減点）
+  if (typeof link.depth === 'number') {
+    score -= link.depth * 0.5;
+  }
+
+  return score;
 }
 
-/** ①-1 ルールベースで問い合わせページ候補を集める */
-async function collectRuleBasedContactUrls(page, companyTopUrl) {
-  const hits = [];
 
-  for (const path of RULE_BASED_PATHS) {
-    const url = buildUrl(companyTopUrl, path);
-    console.log('🔎 Rule-based checking:', url);
+function normalizeUrl(baseUrl, href) {
+  try {
+    const u = new URL(href, baseUrl);
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function collectLinksWithCrawl(page, companyTopUrl, maxDepth = 1, maxPages = 5) {
+  const origin = (() => {
+    try {
+      return new URL(companyTopUrl).origin;
+    } catch {
+      return null;
+    }
+  })();
+
+  const queue = [{ url: companyTopUrl, depth: 0 }];
+  const visited = new Set();
+  const links = [];
+
+  while (queue.length && links.length < 500 && visited.size < maxPages) {
+    const { url, depth } = queue.shift();
+    if (visited.has(url) || depth > maxDepth) continue;
+    visited.add(url);
 
     try {
-      const res = await page.goto(url, { waitUntil: 'domcontentloaded' });
-      const status = res?.status() ?? 0;
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+    } catch (e) {
+      console.warn('collectLinksWithCrawl: goto failed:', url, e.message);
+      continue;
+    }
 
-      // 2xx or 3xx は有効
-      if (status >= 200 && status < 400) {
-        // form or input があるか軽く判定
-        const hasForm = await page.$('form, input, textarea, select');
+    const pageLinks =
+      (await page.$$eval('a', (as) =>
+        as.map((a) => ({
+          href: a.getAttribute('href') || '',
+          text: (a.innerText || a.textContent || '').trim(),
+        })),
+      )) || [];
 
-        if (hasForm) {
-          console.log('✅ Rule-based contact page found:', url);
-          hits.push(url);
+    for (const l of pageLinks) {
+      const abs = normalizeUrl(url, l.href);
+      if (!abs) continue;
+
+      if (origin) {
+        try {
+          const o = new URL(abs).origin;
+          if (o !== origin) continue; // 外部ドメインは除外
+        } catch {
+          continue;
         }
       }
-    } catch (e) {
-      console.warn('Rule-based URL error:', url, e.message);
+
+      const entry = { href: abs, text: l.text, sourceUrl: url, depth };
+      links.push(entry);
+
+      if (!visited.has(abs) && depth + 1 <= maxDepth) {
+        queue.push({ url: abs, depth: depth + 1 });
+      }
     }
   }
 
-  return hits;
+  return links;
 }
 
 /** ①-2 AI に "問い合わせっぽいリンク" を選ばせる（複数indexを返してもOK） */
 async function tryAIContactUrl(page, companyTopUrl, userPrompt) {
   console.log('🤖 tryAIContactUrl START', { url: page.url(), companyTopUrl });
 
-  const currentUrl = page.url() || companyTopUrl;
-  let origin;
-  try {
-    origin = new URL(currentUrl).origin;
-  } catch {
-    try {
-      origin = new URL(companyTopUrl).origin;
-    } catch {
-      origin = null;
-    }
+  // まずは浅くクロールしてリンク候補を集める
+  const links = await collectLinksWithCrawl(page, companyTopUrl);
+  if (!links.length) {
+    console.warn('collectLinksWithCrawl: リンク候補が1件も見つかりませんでした');
+    return [];
   }
 
-  // ハンバーガーメニューがあれば開く（失敗しても無視）
-  // for (const sel of HAMBURGER_SELECTORS) {
-  //   try {
-  //     const locator = page.locator(sel).first();
-  //     if (await locator.count()) {
-  //       await locator.click({ timeout: 1500 }).catch(() => locator.press('Enter').catch(() => {}));
-  //       await page.waitForTimeout(500);
-  //       break;
-  //     }
-  //   } catch (_err) {
-  //     // ignore and try next selector
-  //   }
-  // }
+  // スコア付けして「問い合わせっぽい順」に並べる
+  const scored = links.map((l) => ({
+    ...l,
+    score: scoreLinkForContact(l),
+  }));
+  scored.sort((a, b) => b.score - a.score);
 
-  // ページ内の a タグ（リンク）を全部収集
-  const rawLinks = await page.$$eval('a', (as) =>
-    as.map((a) => ({
-      href: a.getAttribute('href') || '',
-      text: (a.innerText || a.textContent || '').trim(),
+  console.log(
+    '🔗 上位スコアリンク(5件):',
+    scored.slice(0, 5).map((l) => ({
+      href: l.href,
+      text: l.text,
+      depth: l.depth,
+      score: l.score,
     })),
   );
 
-  // フィルタリング:
-  // - href が存在するものだけ
-  // - mailto:, tel:, javascript: は除外
-  // - 外部ドメインは基本除外（origin が取れないときはスキップ）
-  const links = rawLinks
-    .filter((l) => !!l.href)
-    .filter((l) => {
-      const href = l.href.trim();
-      if (!href || href === '#' || href.startsWith('#')) return false;
-      if (href.startsWith('mailto:')) return false;
-      if (href.startsWith('tel:')) return false;
-      if (href.toLowerCase().startsWith('javascript:')) return false;
+  // ルールベースでほぼ確実な問い合わせURLがあれば、AIを使わず即採用
+  const strongRuleHit = scored.find((l) => {
+    const t = `${l.text || ''} ${l.href || ''}`;
+    const hasContactWord =
+      t.includes('お問い合わせ') ||
+      t.includes('お問合せ') ||
+      t.toLowerCase().includes('contact');
 
-      if (!origin) return true;
+    return hasContactWord && scoreLinkForContact(l) >= 10;
+  });
 
-      try {
-        const u = new URL(href, origin);
-        // 外部ドメインは除外
-        return u.origin === origin;
-      } catch {
-        return false;
-      }
-    });
-
-  if (!links.length) {
-    console.warn('リンクが1件も見つかりませんでした');
-    return null;
+  if (strongRuleHit) {
+    console.log('✅ ルールベースで問い合わせURLを特定:', strongRuleHit.href);
+    return [strongRuleHit.href];
   }
 
-  console.log('🔗 AI判定用リンク候補数(フィルタ後):', links.length);
-
-  // 多すぎるとAIが大変なので50件まで
-  const linksForAI = links.slice(0, 100); // 上限を100件に拡大
+  // AI に渡すのは「スコア上位の一部だけ」
+  const linksForAI = scored.slice(0, 150);
   console.log('🔗 AI に渡すリンク数:', linksForAI.length);
-  console.log('🔗 サンプルリンク:', linksForAI.slice(0, 5));
 
   const defaultPrompt = `
-You are an assistant that selects the most likely "contact / inquiry / お問い合わせ / support / request" link from a list.
-- Prefer general contact/inquiry/support/request/contact-form links.
-- Never pick recruit/career/job links.
-- Do not pick privacy/policy/terms links.
-- Do not pick news/blog/press/IR links.
-- Do not pick SNS links (Twitter/X/Facebook/Instagram/LINE, etc).
+あなたは「企業サイトの中から最も問い合わせページらしいリンクを選択する」アシスタントです。
+
+以下のリンク一覧（href とテキスト）から、
+「お問い合わせページ」「問い合わせフォーム」「資料請求フォーム」「コンタクトページ」に該当するものを最大3件まで選んでください。
+
+【優先して選ぶべきリンク】
+- 「お問い合わせ」「お問合せ」「Contact」「Contact Us」「Inquiry」「Support」など
+- 問い合わせフォーム・資料請求・サービスに関する問い合わせ
+- フォームページへ遷移するもの（/contact/, /inquiry/, /support/, /form/ など）
+
+【基本的には選ばないが、ページ内にお問い合わせフォームがある場合のみOK】
+- 検索結果ページ（search や q= を含むURL）
+- 商品一覧やカテゴリ一覧（/collections/, /items/list など）
+- 採用・求人（Recruit, Career, Job, 採用情報）
+- プライバシーポリシー、利用規約（policy, terms, privacy）
+- 会社概要・企業情報（about, company, corporate）
+- ニュース、ブログ、プレスリリース（news, blog, press, IR）
+- SNSリンク（X/Twitter/Facebook/Instagram/LINE など）
+- 決済ページ、会員ログイン、マイページ
+
+【評価のルール】
+- テキストと URL の両方から “問い合わせページらしさ” を総合判断してください。
+- URL が /contact/, /inquiry/, /support/, /form/ を含む場合は優先度が高いです。
+- 「お問い合わせ」を含むリンクは最優先で選んでください。
+
+【出力形式】
+以下の JSON のみを返してください（余計な文章は書かない）:
+
+{
+  "indexes": [番号, 番号, 番号]   // 0〜3件・優先度が高い順
+}
+
+該当するリンクが1つもない場合は:
+
+{
+  "indexes": []
+}
   `.trim();
 
   const headPrompt =
@@ -169,14 +210,10 @@ ${headPrompt}
 
 Base URL: ${companyTopUrl}
 
-Here is a list of links (index, href, text):
+以下は候補リンクの一覧です（index, href, text, sourceUrl, depth, score）:
 ${JSON.stringify(linksForAI, null, 2)}
 
-Return ONLY this JSON (no extra text):
-{ "indexes": [<numbers>]} // up to 3 most likely indexes in descending likelihood
-
-If none look like a contact page, return:
-{ "indexes": [] }
+上記の「indexes」に入れるべき index を選んでください。
 `.trim();
 
   const response = await openai.responses.create({
@@ -184,10 +221,8 @@ If none look like a contact page, return:
     input: prompt,
     max_output_tokens: 20000,
   });
-  // console.log('📨 OpenAI response raw:', JSON.stringify(response, null, 2));
 
   const raw = extractTextFromResponse(response);
-  // console.log('🧠 Contact-link AI raw response:', raw);
   if (!raw) return [];
 
   const parsed = parseJsonFromText(raw);
@@ -203,57 +238,41 @@ If none look like a contact page, return:
       ? [parsed.index]
       : [];
 
-  const validIdx = indexes
-    .filter((i) => Number.isInteger(i) && i >= 0 && i < linksForAI.length);
+  const validIdx = indexes.filter(
+    (i) => Number.isInteger(i) && i >= 0 && i < linksForAI.length,
+  );
 
   if (!validIdx.length) return [];
 
   const urls = [];
   for (const i of validIdx) {
     const chosen = linksForAI[i];
-    try {
-      const abs = new URL(chosen.href, companyTopUrl).toString();
-      urls.push(abs);
-    } catch (e) {
-      console.warn('選ばれた href を URL に変換できませんでした:', chosen.href, e.message);
-    }
+    if (!chosen) continue;
+    urls.push(chosen.href); // href は絶対URLになっている前提
   }
 
   console.log('✅ AIが返した候補URL:', urls);
   return urls;
 }
 
-/** すべての候補URLを返す（ルールベース + AI） */
-export async function findContactPageCandidates(page, companyTopUrl, userPrompt) {
-  await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
-  console.log('🏁 企業TOPへアクセス:', companyTopUrl);
-
-  const candidates = [];
-
-  const ruleHits = USE_RULE_BASED
-    ? await collectRuleBasedContactUrls(page, companyTopUrl)
-    : [];
-  candidates.push(...ruleHits);
-
-  // AI 判定は最新のTOPで実行
-  await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
-  const aiHits = (await tryAIContactUrl(page, companyTopUrl, userPrompt)) || [];
-  candidates.push(...aiHits);
-
-  // 重複除去
-  const seen = new Set();
-  const unique = [];
-  for (const url of candidates) {
-    if (seen.has(url)) continue;
-    seen.add(url);
-    unique.push(url);
+export async function findContactPageCandidates(page, companyTopUrl, userPrompt = '') {
+  // まずトップを開いてリンクを収集
+  try {
+    await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
+  } catch (e) {
+    console.warn('findContactPageCandidates: base goto failed:', e.message);
   }
 
-  return unique;
-}
+  const aiUrls = await tryAIContactUrl(page, companyTopUrl, userPrompt);
+  if (aiUrls.length) return aiUrls;
 
-/** 既存互換：最初の候補だけ返す */
-export async function findContactPageUrl(page, companyTopUrl, userPrompt) {
-  const list = await findContactPageCandidates(page, companyTopUrl, userPrompt);
-  return list[0] || null;
+  // AIで空の場合、スコア順に上位3件返す
+  const links = await collectLinksWithCrawl(page, companyTopUrl, 0);
+  const scored = links
+    .map((l) => ({ ...l, score: scoreLinkForContact(l) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((l) => l.href);
+
+  return scored;
 }
