@@ -1,7 +1,12 @@
+// src/url-discovery-contact.mjs
+
 import { openai } from './lib/openai.mjs';
 import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
+import { crawlSiteForContact } from './url-discovery-crawl.mjs';
 
-// 問い合わせページらしさをスコアリングする関数
+/**
+ * 問い合わせページらしさをスコアリング
+ */
 function scoreLinkForContact(link) {
   const text = link.text || '';
   const href = link.href || '';
@@ -38,7 +43,7 @@ function scoreLinkForContact(link) {
     score -= 20;
   }
 
-  // 深さも少しだけ考慮（深いほどちょっと減点）
+  // 深さ (Top=0, その下=1,…) が深いほど少し減点
   if (typeof link.depth === 'number') {
     score -= link.depth * 0.5;
   }
@@ -46,82 +51,18 @@ function scoreLinkForContact(link) {
   return score;
 }
 
-
-function normalizeUrl(baseUrl, href) {
-  try {
-    const u = new URL(href, baseUrl);
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
-async function collectLinksWithCrawl(page, companyTopUrl, maxDepth = 1, maxPages = 5) {
-  const origin = (() => {
-    try {
-      return new URL(companyTopUrl).origin;
-    } catch {
-      return null;
-    }
-  })();
-
-  const queue = [{ url: companyTopUrl, depth: 0 }];
-  const visited = new Set();
-  const links = [];
-
-  while (queue.length && links.length < 500 && visited.size < maxPages) {
-    const { url, depth } = queue.shift();
-    if (visited.has(url) || depth > maxDepth) continue;
-    visited.add(url);
-
-    try {
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
-    } catch (e) {
-      console.warn('collectLinksWithCrawl: goto failed:', url, e.message);
-      continue;
-    }
-
-    const pageLinks =
-      (await page.$$eval('a', (as) =>
-        as.map((a) => ({
-          href: a.getAttribute('href') || '',
-          text: (a.innerText || a.textContent || '').trim(),
-        })),
-      )) || [];
-
-    for (const l of pageLinks) {
-      const abs = normalizeUrl(url, l.href);
-      if (!abs) continue;
-
-      if (origin) {
-        try {
-          const o = new URL(abs).origin;
-          if (o !== origin) continue; // 外部ドメインは除外
-        } catch {
-          continue;
-        }
-      }
-
-      const entry = { href: abs, text: l.text, sourceUrl: url, depth };
-      links.push(entry);
-
-      if (!visited.has(abs) && depth + 1 <= maxDepth) {
-        queue.push({ url: abs, depth: depth + 1 });
-      }
-    }
-  }
-
-  return links;
-}
-
 /** ①-2 AI に "問い合わせっぽいリンク" を選ばせる（複数indexを返してもOK） */
 async function tryAIContactUrl(page, companyTopUrl, userPrompt) {
   console.log('🤖 tryAIContactUrl START', { url: page.url(), companyTopUrl });
 
-  // まずは浅くクロールしてリンク候補を集める
-  const links = await collectLinksWithCrawl(page, companyTopUrl);
+  // まずは浅くクロールしてリンク候補を集める（Top → 中間ページ → contact までカバー）
+  const links = await crawlSiteForContact(page, companyTopUrl, {
+    maxDepth: 2,   // 深さ2まで (Top=0, その子=1, 孫=2)
+    maxPages: 30,  // 最大 30ページ
+  });
+
   if (!links.length) {
-    console.warn('collectLinksWithCrawl: リンク候補が1件も見つかりませんでした');
+    console.warn('crawlSiteForContact: リンク候補が1件も見つかりませんでした');
     return [];
   }
 
@@ -248,31 +189,40 @@ ${JSON.stringify(linksForAI, null, 2)}
   for (const i of validIdx) {
     const chosen = linksForAI[i];
     if (!chosen) continue;
-    urls.push(chosen.href); // href は絶対URLになっている前提
+    urls.push(chosen.href); // href は絶対URL
   }
 
   console.log('✅ AIが返した候補URL:', urls);
   return urls;
 }
 
+/**
+ * 外部から呼び出すエントリポイント：
+ * 企業トップURLから「問い合わせページ候補URL」を配列で返す
+ */
 export async function findContactPageCandidates(page, companyTopUrl, userPrompt = '') {
-  // まずトップを開いてリンクを収集
+  // まずトップを開いておく（失敗しても続行）
   try {
     await page.goto(companyTopUrl, { waitUntil: 'domcontentloaded' });
   } catch (e) {
     console.warn('findContactPageCandidates: base goto failed:', e.message);
   }
 
+  // 1. まずは AI ベースで探す
   const aiUrls = await tryAIContactUrl(page, companyTopUrl, userPrompt);
   if (aiUrls.length) return aiUrls;
 
-  // AIで空の場合、スコア順に上位3件返す
-  const links = await collectLinksWithCrawl(page, companyTopUrl, 0);
-  const scored = links
+  // 2. AI で空の場合、ルールベースでスコア上位3件を返す（保険）
+  const links = await crawlSiteForContact(page, companyTopUrl, {
+    maxDepth: 2,
+    maxPages: 20,
+  });
+
+  const scoredTop3 = links
     .map((l) => ({ ...l, score: scoreLinkForContact(l) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((l) => l.href);
 
-  return scored;
+  return scoredTop3;
 }
