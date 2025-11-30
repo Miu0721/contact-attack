@@ -18,7 +18,7 @@ export async function analyzeContactFormWithAI(page, senderInfo = {}, message = 
 /**
  * Page / Frame 共通の処理
  * ctx: Playwright の Page または Frame
- * コンタクトページにある　フォームを解析して、全てのタグを返す関数。
+ * コンタクトページにある フォームを解析して、全ての入力タグ情報を返す関数。
  */
 async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = '') {
   // ページ内リソース読み込みの遅延に備え、待機時間を長めに確保
@@ -31,7 +31,7 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
     })
     .catch(() => {});
 
-  // 1. まず form があればその outerHTML を使う。　なければ、input/textarea/select を拾う。
+  // 1. まず form があればその outerHTML を使う。なければ、input/textarea/select を拾う。
   const forms = await ctx.$$('form');
 
   let fieldsHtml = '';
@@ -50,15 +50,15 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
   }
 
   if (fieldsHtml && fieldsHtml.trim()) {
-    const count =
-      (fieldsHtml.match(/<input|<textarea|<select/g) || []).length;
+    const count = (fieldsHtml.match(/<input|<textarea|<select/gi) || []).length;
     console.log('🧩 フィールド要素を検出:', count, '個');
 
     const formHtml = fieldsHtml.startsWith('<form')
       ? fieldsHtml
       : `<form>\n${fieldsHtml}\n</form>`; // 仮フォームとしてラップ
 
-    return await callFormAnalyzerModel(formHtml, senderInfo, message);
+    // ← ★ ここでフィールド数ヒントも一緒に渡す
+    return await callFormAnalyzerModel(formHtml, senderInfo, message, count);
   }
 
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
@@ -89,7 +89,7 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 }
 
 /**
- * 実際に OpenAI に HTML を渡して JSON スキーマを返してもらう部分
+ * Sender 情報をテキスト化してプロンプトに差し込む簡易ヘルパ
  */
 function buildSenderContext(senderInfo = {}, message = '') {
   const entries = Object.entries(senderInfo || {})
@@ -103,12 +103,68 @@ function buildSenderContext(senderInfo = {}, message = '') {
   }
   if (message && message.trim()) {
     contextLines.push('Message:');
-    contextLines.push(message.slice(0, 120) + (message.length > 120 ? '...' : ''));
+    contextLines.push(
+      message.slice(0, 120) + (message.length > 120 ? '...' : ''),
+    );
   }
   return contextLines.length ? contextLines.join('\n') : '';
 }
 
-async function callFormAnalyzerModel(formHtml, senderInfo, message) {
+/**
+ * AI がダメだったとき用のフォールバック：
+ * HTML から input/textarea/select をざっくり抜き出して role=other で返す
+ */
+function buildFallbackFieldsFromHtml(html) {
+  const fields = [];
+  const tagRe = /<(input|textarea|select)\b([^>]*)>/gi;
+  let m;
+
+  const getAttr = (attrs, name) => {
+    const re = new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, 'i');
+    const match = attrs.match(re);
+    return match ? match[1] : '';
+  };
+
+  while ((m = tagRe.exec(html))) {
+    const tag = (m[1] || '').toLowerCase();
+    const attrs = m[2] || '';
+
+    let type = tag;
+    if (tag === 'input') {
+      const t = getAttr(attrs, 'type').toLowerCase() || 'text';
+      // hidden / submit / reset / button / image は無視
+      if (/(hidden|submit|reset|button|image)/i.test(t)) continue;
+      type = t;
+    }
+
+    const nameAttr = getAttr(attrs, 'name');
+    const idAttr = getAttr(attrs, 'id');
+    const placeholder = getAttr(attrs, 'placeholder');
+    const label =
+      placeholder || nameAttr || idAttr || (tag === 'textarea' ? '内容' : '');
+
+    fields.push({
+      nameAttr: nameAttr || '',
+      idAttr: idAttr || '',
+      type,
+      label,
+      role: 'other', // 役割が特定できないので最低限 other で返す
+    });
+  }
+
+  if (!fields.length) {
+    console.warn('fallback でもフィールドを抽出できませんでした');
+    return null;
+  }
+
+  console.log(`🧩 Fallback で ${fields.length} 個の field を生成しました`);
+  return { fields };
+}
+
+/**
+ * 実際に OpenAI に HTML を渡して JSON スキーマを返してもらう部分
+ */
+async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHint = null) {
   console.log('formHtml length:', formHtml.length);
 
   const MAX_LEN = 80000;
@@ -117,93 +173,124 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
 
   const senderContext = buildSenderContext(senderInfo, message);
 
-  const prompt = `
-  あなたは「HTMLお問い合わせフォーム解析ツール」です。
-  
-  ## タスク概要
-  これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
-  その中に含まれる <input>, <textarea>, <select> 要素（※後述の対象ルール参照）を解析し、
-  それぞれのフィールドに対して、Sender情報をもとに「意味的な役割(role)」を 1 つだけ割り当ててください。
-  
-  対象となるサイトは主に **日本語サイト** です。
-  ラベルや周辺テキスト、name/id 属性、placeholder の日本語からフィールドの意味を推測してください。
-  
-  ## この問い合わせの背景（重要）
-  - 当社は **販売代行（営業代行）サービスの提案** を行うために、企業サイトの問い合わせフォームへ送信しています。
-  - ただし、「役割(role)」は **あくまで HTML の意味に基づいて判断** し、  
-    営業目的によって特別扱いはしないでください。  
-    （例：どんな目的で送っていても、email フィールドは email、name フィールドは name）
-  
-  ## role の決定ルール（重要）
-  - **推測しすぎないこと。迷ったら必ず "other" を使う。**
-  - 「それっぽい」程度の曖昧な根拠では、役割を決めないでください。
-  - 以下のように、意味が明確な場合のみ、より具体的な role を使ってください。
-  
-  ### その他
-  - プライバシーポリシーは、すべて同意してください。（checkbox/radio がある場合）
-  
-  ## 含めるべきフィールド / 無視するフィールド
-  ### 含める（出力対象）
-  - ユーザーが入力・選択するデータ項目：
-    - <input type="text|email|tel|number|password|radio|checkbox">
-    - <textarea>
-    - <select>
-  
-  ### 無視する（出力しない）
-  - <input type="hidden">
-  - <input type="submit|reset|button|image">
-  - <button> などの純粋なボタン
-  - 装飾用・技術的な要素で、ユーザーがデータを入力しないもの
-  
-  ### ラジオボタン / チェックボックス / セレクトボックス
-  - 同じ質問項目に属する複数の radio / checkbox / option は、
-    「1つの論理的フィールド」として扱ってください。
-  - ラベルや周辺テキストから role を判定できる場合は付与し、
-    判定できない場合は "other" にしてください。
-  
-  ## 出力フォーマット（厳守）
-  **JSON オブジェクト 1 つだけ** を、次の構造で返してください。
-  JSON 以外のテキスト（説明文、コメント、コードブロック記法など）は一切出力してはいけません。
-  
-  - 有効な JSON を返すこと（ダブルクォート必須、末尾カンマ禁止）。
-  - name 属性や id 属性が存在しない場合は ""（空文字）を入れてください。
-  - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
-    - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
-  
-  出力すべき JSON の構造（例：中身の値はダミーです）:
-  
-  {
-    "fields": [
-      {
-        "nameAttr": "your_name",
-        "idAttr": "name",
-        "type": "text",
-        "label": "お名前",
-        "role": "name"
-      },
-      {
-        "nameAttr": "your_email",
-        "idAttr": "email",
-        "type": "email",
-        "label": "メールアドレス",
-        "role": "email"
-      }
-    ]
-  }
-  
-  ## 実際の入力
-  これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
-  上記のルールに従って解析し、上記フォーマットどおりの JSON オブジェクトを 1 つだけ出力してください。
-  
-  参考情報（入力候補のヒントに使ってよい）:
-  ${senderContext || '(なし)'}
-  
-  対象 HTML:
-  
-  ${trimmedHtml}
-  `.trim();
+  const fieldCountLine =
+    typeof fieldCountHint === 'number'
+      ? `この HTML には、input/textarea/select が合計でおよそ ${fieldCountHint} 個含まれています。\n`
+      : '';
 
-  
+  const prompt = `
+あなたは「HTMLお問い合わせフォーム解析ツール」です。
+
+## タスク概要
+これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
+その中に含まれる <input>, <textarea>, <select> 要素（※後述の対象ルール参照）を解析し、
+それぞれのフィールドに対して、Sender情報をもとに「意味的な役割(role)」を 1 つだけ割り当ててください。
+
+対象となるサイトは主に **日本語サイト** です。
+ラベルや周辺テキスト、name/id 属性、placeholder の日本語からフィールドの意味を推測してください。
+
+${fieldCountLine || ''}
+
+## この問い合わせの背景（重要）
+- 当社は **販売代行（営業代行）サービスの提案** を行うために、企業サイトの問い合わせフォームへ送信しています。
+- ただし、「役割(role)」は **あくまで HTML の意味に基づいて判断** し、
+  営業目的によって特別扱いはしないでください。
+  （例：どんな目的で送っていても、email フィールドは email、name フィールドは name）
+
+## role の決定ルール（重要）
+- **推測しすぎないこと。迷ったら必ず "other" を使う。**
+- 「それっぽい」程度の曖昧な根拠では、役割を決めないでください。
+- 以下のように、意味が明確な場合のみ、より具体的な role を使ってください。
+  - 氏名・お名前 → "name"
+  - 姓・苗字 → "last_name"
+  - 名・下の名前 → "first_name"
+  - メールアドレス → "email"
+  - 電話番号 → "phone"
+  - 会社名・法人名・組織名 → "company_name" または "company"
+  - 部署 → "department"
+  - 役職 → "position"
+  - 住所 → "address"
+  - 件名 → "subject"
+  - 問い合わせ内容 → "message"
+- どれにも当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
+
+### その他
+- プライバシーポリシーへの同意チェックボックスなども、「ユーザーがチェックする要素」であればフィールドとして含めて構いません。
+
+## 含めるべきフィールド / 無視するフィールド
+### 含める（出力対象）
+- ユーザーが入力・選択するデータ項目：
+  - <input type="text|email|tel|number|password|radio|checkbox">
+  - <textarea>
+  - <select>
+
+### 無視する（出力しない）
+- <input type="hidden">
+- <input type="submit|reset|button|image">
+- <button> などの純粋なボタン
+- 装飾用・技術的な要素で、ユーザーがデータを入力しないもの
+
+### ラジオボタン / チェックボックス / セレクトボックス
+- 同じ質問項目に属する複数の radio / checkbox / option は、
+  「1つの論理的フィールド」として扱ってください。
+- ラベルや周辺テキストから role を判定できる場合は付与し、
+  判定できない場合は "other" にしてください。
+
+## 重要な制約（必ず守ること）
+- **入力フィールドが 1つ以上存在する場合は、"fields" 配列を空 [] のまま返してはいけません。**
+- input/textarea/select が存在するのに "fields": [] だけを返すのは **禁止** です。
+- もし役割が全く分からなくても、各フィールドを少なくとも 1件ずつ
+  - nameAttr / idAttr / type / label を埋め、
+  - role: "other"
+  として出力してください。
+
+## 出力フォーマット（厳守）
+**JSON オブジェクト 1 つだけ** を、次の構造で返してください。
+JSON 以外のテキスト（説明文、コメント、コードブロック記法など）は一切出力してはいけません。
+
+- 有効な JSON を返すこと（ダブルクォート必須、末尾カンマ禁止）。
+- name 属性や id 属性が存在しない場合は ""（空文字）を入れてください。
+- "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
+  - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
+
+出力すべき JSON の構造（例：中身の値はダミーです）:
+
+{
+  "fields": [
+    {
+      "nameAttr": "your_name",
+      "idAttr": "name",
+      "type": "text",
+      "label": "お名前",
+      "role": "name"
+    },
+    {
+      "nameAttr": "your_email",
+      "idAttr": "email",
+      "type": "email",
+      "label": "メールアドレス",
+      "role": "email"
+    }
+  ]
+}
+
+## 参考情報（入力値の例）
+以下は、この問い合わせで実際に送信する可能性がある値の例です。
+フィールドの意味を推測するためのヒントとして使っても構いませんが、
+必ずしもこれらの値に合わせる必要はありません。
+
+${senderContext || '(なし)'}
+
+## 対象 HTML
+
+これから、問い合わせフォームまたは入力フィールド群の HTML を渡します。
+上記ルールに従って解析し、必ず 1つの JSON オブジェクトだけを出力してください。
+
+対象 HTML:
+
+${trimmedHtml}
+`.trim();
+
   const response = await openai.responses.create({
     model: 'gpt-5-mini',
     input: prompt,
@@ -222,6 +309,10 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
 
   if (!raw) {
     console.warn('フォームAIから空の返答');
+    // AI が完全に沈黙 → フォールバック（フィールド数ヒントがあれば）
+    if (fieldCountHint && fieldCountHint > 0) {
+      return buildFallbackFieldsFromHtml(trimmedHtml);
+    }
     return null;
   }
 
@@ -235,11 +326,9 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
     } catch (e) {
       console.warn('フォームAI JSON parse失敗 (1st):', jsonStr);
 
-      // ★ フォールバック：
-      // "fields": [ ... ] の JSON 部分だけを抜き出してパース
+      // ★ フォールバック："fields": [ ... ] の JSON 部分だけを抜き出してパース
       const fields = [];
 
-      // 1) "fields" の配列部分を抽出（ブラケットの対応を見てスライス）
       const fieldsIdx = jsonStr.indexOf('"fields"');
       if (fieldsIdx !== -1) {
         const startBracket = jsonStr.indexOf('[', fieldsIdx);
@@ -268,7 +357,6 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
                 }
               }
             } catch (_ignore) {
-              // 2) 個別オブジェクトを拾うフォールバック
               const body = jsonStr.slice(startBracket + 1, endIdx);
               const objectMatches = body.match(/\{[^{}]*\}/g) || [];
               for (const objText of objectMatches) {
@@ -286,17 +374,35 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message) {
 
       if (!fields.length) {
         console.warn('フォームAI JSON parse失敗 (fallbackも失敗):', jsonStr);
+        // ここでも、フィールドがあると分かっている場合はローカルフォールバック
+        if (fieldCountHint && fieldCountHint > 0) {
+          return buildFallbackFieldsFromHtml(trimmedHtml);
+        }
         return null;
       }
 
-      console.log(`🧩 Fallback で ${fields.length} 個の field を復元しました`);
+      console.log(`🧩 Fallback で ${fields.length} 個の field を復元しました(JSON 部分抽出)`);
       parsed = { fields };
     }
   }
 
+  // ここまでで parsed は何かしらのオブジェクトになっているはず
   if (!parsed || !Array.isArray(parsed.fields)) {
     console.warn('fields 配列が見つからない:', parsed);
+    if (fieldCountHint && fieldCountHint > 0) {
+      return buildFallbackFieldsFromHtml(trimmedHtml);
+    }
     return null;
+  }
+
+  // ★ ここが今回一番効くやつ：
+  //   「input/textarea/select があるのに fields が空」の場合は AI を信用せずローカルフォールバック
+  if (parsed.fields.length === 0 && fieldCountHint && fieldCountHint > 0) {
+    console.warn(
+      `AI が fields を空配列で返しましたが、推定フィールド数=${fieldCountHint} なのでローカルフォールバックを実行します`,
+    );
+    const fb = buildFallbackFieldsFromHtml(trimmedHtml);
+    if (fb) return fb;
   }
 
   return parsed;

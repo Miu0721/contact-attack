@@ -17,6 +17,7 @@ import {
 
 // import { notifySlack } from './lib/slack.mjs';
 
+
 async function appendFormLogSafe(params) {
   try {
     await appendFormQuestionsAndAnswers(params);
@@ -62,6 +63,8 @@ export async function runFromSheetJob() {
   // Cloud Run 前提なら headless: true を推奨
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(60000); // 60秒に延長
+  page.setDefaultTimeout(60000);
 
   try {
     for (const contact of contacts) {
