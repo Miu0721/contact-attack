@@ -17,6 +17,7 @@ import {
 
 // import { notifySlack } from './lib/slack.mjs';
 
+
 async function appendFormLogSafe(params) {
   try {
     await appendFormQuestionsAndAnswers(params);
@@ -60,23 +61,15 @@ async function appendFormLogSafe(params) {
   }
 
   // 2. ブラウザを起動
-  const browser = await chromium.launch({ headless: false });
+  // Cloud Run 前提なら headless: true を推奨
+  const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   page.setDefaultNavigationTimeout(60000);
   page.setDefaultTimeout(60000);
 
-  for (const contact of contacts) {
-    // すでに処理済みならスキップ
-    if (
-      contact.status &&
-      contact.status !== '' &&
-      contact.status !== 'Pending'
-    ) {
       console.log(
-        `⏩ Skip: ${contact.companyName} (status=${contact.status})`
+        `🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`
       );
-      continue;
-    }
 
     console.log(
       `🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`
@@ -104,12 +97,10 @@ async function appendFormLogSafe(params) {
         ? [contactUrl]
         : await findContactPageCandidates(page, baseUrl, contactPrompt);
 
-      // コンタクトページが見つからなければ、エラーを出す。
-      if (!candidateUrls.length) {
-        lastResult = 'form_not_found';
-        lastErrorMsg = '問い合わせフォームURLを特定できませんでした';
-        status = 'Failed';
-        console.warn('❌ 問い合わせページURLが見つからない');
+      let status = 'Failed';
+      let lastResult = '';
+      let lastErrorMsg = '';
+      let contactUrl = contact.contactUrl;
 
         // slack通知処理
         // await notifySlack(
@@ -133,51 +124,96 @@ async function appendFormLogSafe(params) {
       }
       let success = false;
 
-      for (const candidate of candidateUrls) {
-        contactUrl = candidate;
-        console.log('📨 問い合わせページを試行:', contactUrl);
+          await updateContactRowValues(contact, {
+            contactUrl,
+            status,
+            lastRunAt: timestamp,
+            lastResult,
+            lastErrorMsg,
+            runCount,
+          });
 
-        try {
-          await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
-        } catch (navErr) {
-          console.warn(
-            '⚠️ ページ遷移に失敗:',
-            navErr?.message || navErr
-          );
-          lastErrorMsg = navErr?.message || String(navErr);
+          // 👇 他の会社は処理したいので return ではなく continue
+          return;
+        }
+
+        // 候補URLを取得（指定済み contactUrl を優先、無ければ探索）
+        const candidateUrls = contactUrl
+          ? [contactUrl]
+          : await findContactPageCandidates(page, baseUrl, contactPrompt);
+
+        // コンタクトページが見つからなければ、エラーを出す。
+        if (!candidateUrls.length) {
+          lastResult = 'form_not_found';
+          lastErrorMsg = '問い合わせフォームURLを特定できませんでした';
+          status = 'Failed';
+          console.warn('❌ 問い合わせページURLが見つからない');
+
+          // slack通知処理
+          // await notifySlack(
+          //   `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
+          //     `会社名: ${contact.companyName}\n` +
+          //     `ベースURL: ${baseUrl}\n` +
+          //     `row: ${contact.rowIndex}\n` +
+          //     `エラー: ${lastErrorMsg}`
+          // );
+
+          // Contactsシートを更新（コンタクトページURL）
+          await updateContactRowValues(contact, {
+            contactUrl,
+            status,
+            lastRunAt: timestamp,
+            lastResult,
+            lastErrorMsg,
+            runCount,
+          });
           continue;
         }
 
-        // コンタクトページのフォーム構造を解析
-        formSchema = await analyzeContactFormWithAI(
-          page,
-          senderInfo,
-          message
-        );
-        if (!formSchema) {
-          console.warn('❌ フォーム構造解析に失敗');
-          lastResult = 'form_schema_error';
-          lastErrorMsg = 'フォーム構造を解析できませんでした';
-          continue;
-        }
+        let filledSummary = [];
+        let formSchema = null;
+        let success = false;
 
-        console.log(
-          '🧾 form schema:',
-          JSON.stringify(formSchema, null, 2)
-        );
+        for (const candidate of candidateUrls) {
+          contactUrl = candidate;
+          console.log('📨 問い合わせページを試行:', contactUrl);
 
-        // AIの解析をもとに、フォームを入力
-        filledSummary =
-          (await fillContactForm(
+          try {
+            await page.goto(contactUrl, { waitUntil: 'domcontentloaded' });
+          } catch (navErr) {
+            console.warn(
+              '⚠️ ページ遷移に失敗:',
+              navErr?.message || navErr
+            );
+            lastErrorMsg = navErr?.message || String(navErr);
+            continue;
+          }
+
+          // コンタクトページのフォーム構造を解析
+          formSchema = await analyzeContactFormWithAI(
             page,
-            formSchema,
             senderInfo,
             message
-          )) || [];
-        console.log(
-          '🧾 filledSummary:',
-          JSON.stringify(filledSummary, null, 2)
-        );
+          );
+          if (!formSchema) {
+            console.warn('❌ フォーム構造解析に失敗');
+            lastResult = 'form_schema_error';
+            lastErrorMsg = 'フォーム構造を解析できませんでした';
+            continue;
+          }
+
+          // AIの解析をもとに、フォームを入力
+          filledSummary =
+            (await fillContactForm(
+              page,
+              formSchema,
+              senderInfo,
+              message
+            )) || [];
+          console.log(
+            '🧾 filledSummary:',
+            JSON.stringify(filledSummary, null, 2)
+          );
 
         if (filledSummary.length === 0) {
           console.warn('⚠️ 入力サマリが空でした');
@@ -217,32 +253,17 @@ async function appendFormLogSafe(params) {
       // フォームが入力できなかった場合、エラーを出す。
       if (!success) {
         status = 'Failed';
-        if (!lastResult) lastResult = 'form_not_filled';
 
+        // Slack 通知（予期しない例外）
         // await notifySlack(
-        //   `[contact-attack-bot] ❌ フォーム入力に失敗\n` +
+        //   `[contact-attack-bot] 🔴 例外発生\n` +
         //     `会社名: ${contact.companyName}\n` +
-        //     `問い合わせURL候補: ${candidateUrls.join(', ')}\n` +
+        //     `siteUrl: ${contact.siteUrl}\n` +
+        //     `contactUrl: ${contactUrl || '(未決定)'}\n` +
         //     `row: ${contact.rowIndex}\n` +
         //     `エラー: ${lastErrorMsg}`
         // );
       }
-    } catch (err) {
-      console.error('💥 Error while processing contact:', err);
-      lastResult = 'exception';
-      lastErrorMsg = String(err);
-      status = 'Failed';
-
-      // Slack 通知（予期しない例外）
-      // await notifySlack(
-      //   `[contact-attack-bot] 🔴 例外発生\n` +
-      //     `会社名: ${contact.companyName}\n` +
-      //     `siteUrl: ${contact.siteUrl}\n` +
-      //     `contactUrl: ${contactUrl || '(未決定)'}\n` +
-      //     `row: ${contact.rowIndex}\n` +
-      //     `エラー: ${lastErrorMsg}`
-      // );
-    }
 
     // 4. シート更新（FormLogs とは分離）
     await updateContactRowValues(contact, {
@@ -261,6 +282,12 @@ async function appendFormLogSafe(params) {
       setTimeout(r, 1000 + Math.random() * 2000)
     );
   }
+}
 
-  await browser.close();
-})();
+// 🔧 いままで通り、ローカルで `node src/run-from-sheet.mjs` したら動くようにしておく
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runFromSheetJob().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
