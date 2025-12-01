@@ -28,6 +28,8 @@ async function appendFormLogSafe(params) {
   }
 }
 
+// FormLog の概要を Contacts に流し込む処理は撤廃
+
 (async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
   // Sender シートから情報を取得（失敗したら空オブジェクト/空文字で進む）
@@ -60,6 +62,8 @@ async function appendFormLogSafe(params) {
   // 2. ブラウザを起動
   const browser = await chromium.launch({ headless: false });
   const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(60000);
+  page.setDefaultTimeout(60000);
 
   for (const contact of contacts) {
     // すでに処理済みならスキップ
@@ -85,6 +89,8 @@ async function appendFormLogSafe(params) {
     let lastResult = '';
     let lastErrorMsg = '';
     let contactUrl = contact.contactUrl;
+    let filledSummary = [];
+    let formSchema = null;
 
     try {
       // 1. サイトURLをContactsシートから取得
@@ -125,9 +131,6 @@ async function appendFormLogSafe(params) {
         });
         continue;
       }
-
-      let filledSummary = [];
-      let formSchema = null;
       let success = false;
 
       for (const candidate of candidateUrls) {
@@ -176,37 +179,12 @@ async function appendFormLogSafe(params) {
           JSON.stringify(filledSummary, null, 2)
         );
 
-        // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
-        const captchaEntry = filledSummary.find(
-          (f) => f.role === 'captcha'
-        );
-        if (captchaEntry) {
-          lastResult = 'captcha_detected';
-          lastErrorMsg =
-            'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
-          status = 'Failed';
-
-          await appendFormLogSafe({
-            contact,
-            contactUrl,
-            siteUrl: contact.siteUrl,
-            filledSummary,
-            formSchema,
-          });
-
-          // 次のリンク/企業へ
-          success = true; // これ以上のエラー通知を避けるため success として扱う
-          break;
-        }
-
         if (filledSummary.length === 0) {
           console.warn('⚠️ 入力サマリが空でした');
           lastResult = 'fill_empty';
           lastErrorMsg = '入力できるフィールドがありませんでした';
           continue;
         }
-
-        success = true;
 
         await appendFormLogSafe({
           contact,
@@ -216,6 +194,19 @@ async function appendFormLogSafe(params) {
           formSchema,
         });
 
+        // const captchaEntry = filledSummary.find(
+        //   (f) => f.role === 'captcha'
+        // );
+        // if (captchaEntry) {
+        //   lastResult = 'captcha_detected';
+        //   lastErrorMsg =
+        //     'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
+        //   status = 'Failed';
+        //   success = true; // これ以上のエラー通知を避けるため success として扱う
+        //   break;
+        // }
+
+        success = true;
         lastResult = 'filled';
         status = 'Success';
 
@@ -253,7 +244,7 @@ async function appendFormLogSafe(params) {
       // );
     }
 
-    // 4. シート更新
+    // 4. シート更新（FormLogs とは分離）
     await updateContactRowValues(contact, {
       contactUrl,
       status,

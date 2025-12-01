@@ -2,13 +2,13 @@
 
 // 「お問い合わせ種別」で選びたいラベル
 const CATEGORY_LABEL = '案件のご依頼';
-const RECAPTCHA_SELECTORS = [
-  'iframe[src*="google.com/recaptcha"]',
-  'div.g-recaptcha',
-  'div.recaptcha',
-  'input[aria-label*="not a robot" i]',
-  'input[aria-label*="ロボットではありません"]',
-];
+// const RECAPTCHA_SELECTORS = [
+//   'iframe[src*="google.com/recaptcha"]',
+//   'div.g-recaptcha',
+//   'div.recaptcha',
+//   'input[aria-label*="not a robot" i]',
+//   'input[aria-label*="ロボットではありません"]',
+// ];
 
 const IMAGE_CAPTCHA_KEYWORDS = [
   'captcha',
@@ -87,75 +87,75 @@ function valueForRole(role, senderInfo, message) {
   return '';
 }
 
-async function detectRecaptcha(page) {
-  for (const sel of RECAPTCHA_SELECTORS) {
-    const handle = await page.$(sel);
-    if (handle) {
-      console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
-      return {
-        role: 'captcha',
-        type: 'recaptcha',
-        selector: sel,
-        label: 'reCAPTCHA detected',
-        nameAttr: '',
-        idAttr: '',
-        value: 'manual_action_required',
-      };
-    }
-  }
-  return null;
-}
+// async function detectRecaptcha(page) {
+//   for (const sel of RECAPTCHA_SELECTORS) {
+//     const handle = await page.$(sel);
+//     if (handle) {
+//       console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
+//       return {
+//         role: 'captcha',
+//         type: 'recaptcha',
+//         selector: sel,
+//         label: 'reCAPTCHA detected',
+//         nameAttr: '',
+//         idAttr: '',
+//         value: 'manual_action_required',
+//       };
+//     }
+//   }
+//   return null;
+// }
 
-async function detectImageCaptchas(page) {
-  try {
-    return (
-      (await page.$$eval(
-        'input, textarea',
-        (elems, keywords) =>
-          elems
-            .map((el) => {
-              const tag = el.tagName?.toLowerCase() || '';
-              const nameAttr = el.getAttribute('name') || '';
-              const idAttr = el.id || '';
-              const placeholder = el.getAttribute('placeholder') || '';
-              const aria = el.getAttribute('aria-label') || '';
+// async function detectImageCaptchas(page) {
+//   try {
+//     return (
+//       (await page.$$eval(
+//         'input, textarea',
+//         (elems, keywords) =>
+//           elems
+//             .map((el) => {
+//               const tag = el.tagName?.toLowerCase() || '';
+//               const nameAttr = el.getAttribute('name') || '';
+//               const idAttr = el.id || '';
+//               const placeholder = el.getAttribute('placeholder') || '';
+//               const aria = el.getAttribute('aria-label') || '';
 
-              const labelText = (() => {
-                if (idAttr) {
-                  const lbl = document.querySelector(`label[for="${idAttr}"]`);
-                  if (lbl) return lbl.innerText.trim();
-                }
-                const parentLabel = el.closest('label');
-                if (parentLabel) return parentLabel.innerText.trim();
-                return '';
-              })();
+//               const labelText = (() => {
+//                 if (idAttr) {
+//                   const lbl = document.querySelector(`label[for="${idAttr}"]`);
+//                   if (lbl) return lbl.innerText.trim();
+//                 }
+//                 const parentLabel = el.closest('label');
+//                 if (parentLabel) return parentLabel.innerText.trim();
+//                 return '';
+//               })();
 
-              const combined = `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`.toLowerCase();
-              const matched = keywords.some((k) => combined.includes(k.toLowerCase()));
-              if (!matched) return null;
+//               const combined = `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`.toLowerCase();
+//               const matched = keywords.some((k) => combined.includes(k.toLowerCase()));
+//               if (!matched) return null;
 
-              const selector = idAttr
-                ? `#${idAttr}`
-                : nameAttr
-                  ? `${tag}[name="${nameAttr}"]`
-                  : tag || 'input';
+//               const selector = idAttr
+//                 ? `#${idAttr}`
+//                 : nameAttr
+//                   ? `${tag}[name="${nameAttr}"]`
+//                   : tag || 'input';
 
-              return {
-                selector,
-                label: labelText || placeholder || aria || '',
-                nameAttr,
-                idAttr,
-                type: tag || 'input',
-              };
-            })
-            .filter(Boolean),
-        IMAGE_CAPTCHA_KEYWORDS
-      )) || []
-    );
-  } catch (_e) {
-    return [];
-  }
-}
+//               return {
+//                 selector,
+//                 label: labelText || placeholder || aria || '',
+//                 nameAttr,
+//                 idAttr,
+//                 type: tag || 'input',
+//               };
+//             })
+//             .filter(Boolean),
+//         IMAGE_CAPTCHA_KEYWORDS
+//       )) || []
+//     );
+//   } catch (_e) {
+//    return [];
+//   }
+// }
 
 async function fillCheckbox(page, selectors, meta, filledSummary) {
   for (const sel of selectors) {
@@ -361,27 +361,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   const filledSummary = [];
   let orderCounter = 1;
 
-  // reCAPTCHA など「私はロボットではありません」を検出してログに残す
-  const recaptcha = await detectRecaptcha(page);
-  if (recaptcha) {
-    filledSummary.push({ ...recaptcha, order: 0 });
-  }
-
-  // reCAPTCHA など画像認証を検出してログに残す
-  const imageCaptchas = await detectImageCaptchas(page);
-  for (const info of imageCaptchas) {
-    filledSummary.push({
-      role: 'captcha',
-      type: 'image_captcha',
-      selector: info.selector,
-      label: info.label,
-      nameAttr: info.nameAttr,
-      idAttr: info.idAttr,
-      order: 0,
-      value: 'manual_action_required',
-    });
-    console.log('🛡️ 画像認証/キャプチャ入力欄を検出:', info.selector);
-  }
+  // reCAPTCHA / 画像認証検出は無効化
 
   for (const f of formSchema.fields) {
     const role = f.role;

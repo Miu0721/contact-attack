@@ -183,14 +183,44 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     formSchema,
   } = params;
 
-  const entries =
-    (filledSummary && filledSummary.length > 0
-      ? filledSummary
-      : (formSchema?.fields || []).map((f, idx) => ({
-          ...f,
-          value: '',
-          order: idx + 1,
-        }))) || [];
+  const mergeEntries = () => {
+    const schemaFields =
+      (formSchema?.fields || []).map((f, idx) => ({
+        ...f,
+        value: '',
+        order: idx + 1,
+      })) || [];
+
+    const summary = filledSummary || [];
+
+    // キー生成: role/name/id/label でなるべく安定させる
+    const keyOf = (item) =>
+      [
+        item.role || 'field',
+        item.nameAttr || '',
+        item.idAttr || '',
+        item.label || '',
+      ].join('|');
+
+    const map = new Map();
+
+    schemaFields.forEach((item) => {
+      map.set(keyOf(item), { ...item });
+    });
+
+    summary.forEach((item) => {
+      const k = keyOf(item);
+      if (map.has(k)) {
+        map.set(k, { ...map.get(k), ...item });
+      } else {
+        map.set(k, { ...item });
+      }
+    });
+
+    return Array.from(map.values());
+  };
+
+  const entries = mergeEntries();
 
   const normalizedEntries = collapseLogicalFields(entries);
 
