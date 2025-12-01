@@ -8,8 +8,7 @@ const SPREADSHEET_ID = process.env.SHEET_ID;
 
 // Sender 用のタブ名（シート名）
 const SENDER_SHEET_NAME = 'Sender';
-const FORM_LOG_SHEET_NAME =
-  process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
+const FORM_LOG_SHEET_NAME = process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
 
 let sheetsClient = null;
 let formLogSheetChecked = false;
@@ -19,8 +18,7 @@ function collapseLogicalFields(entries = []) {
   const result = [];
 
   for (const item of entries) {
-    const isGroupTarget =
-      item.type === 'radio' || item.type === 'checkbox';
+    const isGroupTarget = item.type === 'radio' || item.type === 'checkbox';
 
     if (isGroupTarget) {
       const hasAttr = item.nameAttr || item.idAttr;
@@ -46,7 +44,6 @@ async function getSheets() {
   if (sheetsClient) return sheetsClient;
 
   const auth = new google.auth.GoogleAuth({
-    // ★ contactsRepo.mjs と同じ
     keyFile: 'service-account.json',
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
@@ -98,8 +95,7 @@ async function ensureFormLogSheetExists() {
 }
 
 /**
- * Sender シートから自社情報を取得して、
- * { senderInfo, message, companyTopUrl } を返す
+ * Sender シートから自社情報を取得
  */
 export async function loadSenderFromSheet() {
   if (!SPREADSHEET_ID) {
@@ -131,9 +127,8 @@ export async function loadSenderFromSheet() {
   }
 
   const senderInfo = {
-    // フルネームが優先、無ければ姓+名の結合
     name: map.name,
-    nameKana: map.nameKana,    
+    nameKana: map.nameKana,
     lastName: map.lastName,
     firstName: map.firstName,
     lastNameKana: map.lastNameKana,
@@ -153,8 +148,8 @@ export async function loadSenderFromSheet() {
     company: map.company,
     department: map.department,
     phone: map.phone,
+    organization: map.company,
   };
-   
 
   const message = map.message;
   const companyTopUrl = map.companyTopUrl;
@@ -168,16 +163,9 @@ export async function loadSenderFromSheet() {
   };
 }
 
-
 /**
  * フォームの質問項目と入力値を FormLogs シートに追記する
- *
- * @param {Object} params
- * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
- * @param {string} params.contactUrl - 実際にアクセスした問い合わせURL
- * @param {string} params.siteUrl - 企業サイトのURL
- * @param {Array} params.filledSummary - fillContactForm が返す入力サマリ
- * @param {Object} params.formSchema - analyzeContactFormWithAI の返り値
+ * 「1 URL = 1 行」横展開で記録
  */
 export async function appendFormQuestionsAndAnswers(params = {}) {
   if (!SPREADSHEET_ID) {
@@ -212,27 +200,34 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
   }
 
   const timestamp = new Date().toISOString();
-  const rows = normalizedEntries.map((item, idx) => [
-    timestamp,
-    contact?.companyName || '',
-    contact?.rowIndex || '',
-    siteUrl || contact?.siteUrl || '',
-    contactUrl || contact?.contactUrl || '',
-    item.role || '',
-    item.label || '',
-    item.type || '',
-    item.nameAttr || '',
-    item.idAttr || '',
-    item.selector || '',
-    item.order != null ? item.order : idx + 1,
-    item.value != null ? String(item.value) : '',
-  ]);
+
+  // A〜E列: メタ情報
+  const baseCols = [
+    timestamp, // A
+    contact?.companyName || '', // B
+    contact?.rowIndex || '', // C
+    siteUrl || contact?.siteUrl || '', // D
+    contactUrl || contact?.contactUrl || '', // E
+  ];
+
+  // F列以降: 「質問(ラベル/role)」→「回答」の順で横展開
+  const answerCols = [];
+  normalizedEntries.forEach((item, idx) => {
+    const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
+    const role = item.role || 'field';
+    const key = `${role}:${label}`;
+    const val = item.value != null ? String(item.value) : '';
+    answerCols.push(key, val); // 質問 → 回答 のペア
+  });
+
+  const row = [...baseCols, ...answerCols];
 
   try {
     await ensureFormLogSheetExists();
 
     const sheets = await getSheets();
-    // append が横方向にずれることを避けるため、自前で最終行+1を計算して update する
+
+    // 既存の行数を取得して、最終行+1 の行に書き込む
     const existing = await sheets.spreadsheets.values
       .get({
         spreadsheetId: SPREADSHEET_ID,
@@ -242,15 +237,14 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
 
     const startRow =
       (existing.data.values && existing.data.values.length) || 0;
-    const startIndex = startRow + 1; // 1-based
-    const endIndex = startIndex + rows.length - 1;
+    const targetRow = startRow + 1; // 1-based
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${FORM_LOG_SHEET_NAME}!A${startIndex}:M${endIndex}`,
+      range: `${FORM_LOG_SHEET_NAME}!A${targetRow}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: rows,
+        values: [row],
       },
     });
   } catch (err) {
