@@ -198,27 +198,61 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         （例：どんな目的で送っていても、email フィールドは email、name フィールドは name）
       
       ## role の決定ルール（重要）
+      - 各フィールドの "role" には、**必ず次のどれか 1 つだけ** を設定してください。
+        - "name"
+        - "lastName"
+        - "firstName"
+        - "nameKana"
+        - "lastNameKana"
+        - "firstNameKana"
+        - "email"
+        - "company-name"
+        - "department"
+        - "phone"
+        - "companyTopUrl"
+        - "personalPhone"
+        - "position"
+        - "referral"
+        - "gender"
+        - "postalCode"
+        - "prefecture"
+        - "address"
+        - "age"
+        - "inquiryCategory"
+        - "subject"
+        - "inquiryType"
+        - "message"
+        - どれにも当てはまらない場合だけ "other"
+
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
-      - 「それっぽい」程度の曖昧な根拠では、役割を決めないでください。
-      - 以下のように、意味が明確な場合のみ、より具体的な role を使ってください。
-      
+      - 「それっぽい」程度の曖昧な根拠では、上の具体的な role を付けないでください。
+
+      - 典型例（目安）：
         - 氏名・お名前 → "name"
-        - 姓・苗字 → "last_name"
-        - 名・下の名前 → "first_name"
-        - ふりがな・フリガナ・おなまえのよみ → "name_kana"
+        - 姓・苗字 → "lastName"
+        - 名・下の名前 → "firstName"
+        - お名前（フリガナ）全体 → "nameKana"
+        - 姓（フリガナ） → "lastNameKana"
+        - 名（フリガナ） → "firstNameKana"
         - メールアドレス → "email"
-        - 電話番号 → "phone"
-        - 会社名・法人名・組織名 → "company_name" または "company"
-        - 部署 → "department"
-        - 役職 → "position"
-        - 郵便番号・〒 → "postal_code"
-        - 住所（都道府県・市区町村レベル全体） → "address"
-        - 番地・丁目・号などの詳細住所 → "address_line"
-        - 業種・業種名・事業内容 → "industry"
-        - 件名 → "subject"
-        - 問い合わせ内容 → "message"
-      
-      - どれにも当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
+        - 会社名・法人名・組織名 → "company-name"
+        - 部署名 → "department"
+        - 電話番号（会社代表・連絡先としか書いていない場合を含む） → "phone"
+        - 会社ホームページURL・コーポレートサイトURL → "companyTopUrl"
+        - 担当者の個人携帯・個人電話番号と明記されている場合 → "personalPhone"
+        - 役職（部長・課長・代表取締役 など） → "position"
+        - 当社をどこで知りましたか・紹介元・流入経路 → "referral"
+        - 性別 → "gender"
+        - 郵便番号・〒 → "postalCode"
+        - 都道府県のみを入力させる項目 → "prefecture"
+        - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
+        - 年齢・ご年齢・年代 → "age"
+        - 「お問い合わせ区分」「ご用件区分」「カテゴリ」などカテゴリ選択 → "inquiryCategory"
+        - 「お問い合わせ種別」「お問い合わせの種類」など種別選択 → "inquiryType"
+        - 件名・タイトル → "subject"
+        - お問い合わせ内容・ご質問内容・ご相談内容 → "message"
+
+      - どれにもはっきり当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
       
       ### その他
       - プライバシーポリシーへの同意チェックボックスなども、「ユーザーがチェックする要素」であればフィールドとして含めて構いません。
