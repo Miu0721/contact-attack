@@ -259,7 +259,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       
       ## 含めるべきフィールド / 無視するフィールド
       ### 含める（出力対象）
-      - ユーザーが入力・選択するデータ項目：
+      - ユーザーが入力・選択するデータ項目：s
         - <input type="text|email|tel|number|password|radio|checkbox">
         - <textarea>
         - <select>
