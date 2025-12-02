@@ -142,6 +142,9 @@ function buildFallbackFieldsFromHtml(html) {
     const placeholder = getAttr(attrs, 'placeholder');
     const label =
       placeholder || nameAttr || idAttr || (tag === 'textarea' ? '内容' : '');
+    const required =
+      /\srequired\b/i.test(attrs) ||
+      /aria-required\s*=\s*["']?true["']?/i.test(attrs);
 
     fields.push({
       nameAttr: nameAttr || '',
@@ -149,6 +152,7 @@ function buildFallbackFieldsFromHtml(html) {
       type,
       label,
       role: 'other', // 役割が特定できないので最低限 other で返す
+      required,
     });
   }
 
@@ -280,7 +284,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       - **入力フィールドが 1つ以上存在する場合は、"fields" 配列を空 [] のまま返してはいけません。**
       - input/textarea/select が存在するのに "fields": [] だけを返すのは **禁止** です。
       - もし役割が全く分からなくても、各フィールドを少なくとも 1件ずつ
-        - nameAttr / idAttr / type / label を埋め、
+        - nameAttr / idAttr / type / label / required を埋め、
         - role: "other"
         として出力してください。
       
@@ -290,6 +294,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       
       - 有効な JSON を返すこと（ダブルクォート必須、末尾カンマ禁止）。
       - name 属性や id 属性が存在しない場合は ""（空文字）を入れてください。
+      - "required" は、そのフィールドが必須なら true、そうでなければ false にしてください（判定できない場合も false）。
       - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
         - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
       
@@ -302,14 +307,16 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
             "idAttr": "name",
             "type": "text",
             "label": "お名前",
-            "role": "name"
+            "role": "name",
+            "required": true
           },
           {
             "nameAttr": "your_email",
             "idAttr": "email",
             "type": "email",
             "label": "メールアドレス",
-            "role": "email"
+            "role": "email",
+            "required": true
           }
         ]
       }
