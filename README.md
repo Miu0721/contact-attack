@@ -71,3 +71,19 @@
 - reCAPTCHA/画像認証を検出した場合は入力を中断し、ログのみ残します（手動対応前提）。
 - ネットワーク先サイトの利用規約・robots を尊重し、適切な間隔で実行してください。
 - Contactsの ID, Company Name, Site URL は必ず、入れること。　（FormLogを正確に出すため）
+
+
+# 1. Docker イメージをビルドして Cloud Build にアップ
+gcloud builds submit \
+  --tag gcr.io/contact-attack/contact-attack-bot
+
+# 2. Cloud Run にデプロイ
+gcloud run deploy contact-attack-bot \
+  --image gcr.io/contact-attack/contact-attack-bot \
+  --region asia-northeast1 \
+  --set-env-vars SHEET_ID=1cj-Pi7-pD11LQAIMsOSv2rCXEPphjmgpMwzhb7AMthc \
+  --set-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest,SA_JSON=SA_JSON:latest \
+  --memory 1Gi \s
+  --cpu 1 \
+  --max-instances 1 \
+  --allow-unauthenticated
