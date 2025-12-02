@@ -9,9 +9,10 @@ const SPREADSHEET_ID = process.env.SHEET_ID;
 // Sender 用のタブ名（シート名）
 const SENDER_SHEET_NAME = 'Sender';
 
-// フォーム項目詳細ログ用タブ名（デフォルト Contacts に書く想定）
+// 詳細ログ用タブ名（1送信=1行で質問/回答を残したい場合）
+// 別タブにしたくなければ .env の FORM_LOG_SHEET_NAME を Contacts にしてもOK
 const FORM_LOG_SHEET_NAME =
-  process.env.FORM_LOG_SHEET_NAME || 'Contacts';
+  process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
 
 let sheetsClient = null;
 let formLogSheetChecked = false;
@@ -26,7 +27,8 @@ function collapseLogicalFields(entries = []) {
   const result = [];
 
   for (const item of entries) {
-    const isGroupTarget = item.type === 'radio' || item.type === 'checkbox';
+    const isGroupTarget =
+      item.type === 'radio' || item.type === 'checkbox';
 
     if (isGroupTarget) {
       const hasAttr = item.nameAttr || item.idAttr;
@@ -52,6 +54,7 @@ async function getSheets() {
   if (sheetsClient) return sheetsClient;
 
   const auth = new google.auth.GoogleAuth({
+    // ★ contactsRepo.mjs と同じ
     keyFile: 'service-account.json',
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
@@ -116,7 +119,13 @@ async function ensureFormLogSheetExists() {
         },
       });
 
-      // （必要ならここでヘッダー A1:M1 を書く処理を足してもOK）
+      // ★必要ならここで FormLogs のヘッダーを書く（任意）
+      // await sheets.spreadsheets.values.update({
+      //   spreadsheetId: SPREADSHEET_ID,
+      //   range: `${FORM_LOG_SHEET_NAME}!A1:E1`,
+      //   valueInputOption: 'USER_ENTERED',
+      //   requestBody: { values: [['timestamp','companyName','rowIndex','siteUrl','contactUrl']] },
+      // });
     }
   } catch (_err) {
     // ここでの失敗は append 側でリトライ・ログする
@@ -180,7 +189,6 @@ export async function loadSenderFromSheet() {
     company: map.company,
     department: map.department,
     phone: map.phone,
-    organization: map.company,
   };
 
   const message = map.message;
@@ -193,133 +201,6 @@ export async function loadSenderFromSheet() {
     companyTopUrl,
     contactPrompt,
   };
-}
-
-/**
- * フォームの質問項目と入力値を FormLogs シートに追記する
- * 「1 URL = 1 行」横展開で記録
- */
-export async function appendFormQuestionsAndAnswers(params = {}) {
-  if (!SPREADSHEET_ID) {
-    console.warn(
-      'SHEET_ID が未設定のため、フォームログ出力はスキップします'
-    );
-    return;
-  }
-
-  const {
-    contact,
-    contactUrl,
-    siteUrl,
-    filledSummary,
-    formSchema,
-  } = params;
-
-  const mergeEntries = () => {
-    const schemaFields =
-      (formSchema?.fields || []).map((f, idx) => ({
-        ...f,
-        value: '',
-        order: idx + 1,
-      })) || [];
-
-    const summary = filledSummary || [];
-
-    // キー生成: role/name/id/label でなるべく安定させる
-    const keyOf = (item) =>
-      [
-        item.role || 'field',
-        item.nameAttr || '',
-        item.idAttr || '',
-        item.label || '',
-      ].join('|');
-
-    const map = new Map();
-
-    schemaFields.forEach((item) => {
-      map.set(keyOf(item), { ...item });
-    });
-
-    summary.forEach((item) => {
-      const k = keyOf(item);
-      if (map.has(k)) {
-        map.set(k, { ...map.get(k), ...item });
-      } else {
-        map.set(k, { ...item });
-      }
-    });
-
-    return Array.from(map.values());
-  };
-
-  const entries = mergeEntries();
-
-  const normalizedEntries = collapseLogicalFields(entries);
-
-  if (!normalizedEntries.length) {
-    console.warn('appendFormQuestionsAndAnswers: ログ対象の項目がありません');
-    return;
-  }
-
-  const timestamp = new Date().toISOString();
-
-  // A〜E列: メタ情報
-  const baseCols = [
-    timestamp, // A
-    contact?.companyName || '', // B
-    contact?.rowIndex || '', // C
-    siteUrl || contact?.siteUrl || '', // D
-    contactUrl || contact?.contactUrl || '', // E
-  ];
-
-  // F列以降: 「質問(ラベル/role)」→「回答」の順で横展開
-  const answerCols = [];
-  normalizedEntries.forEach((item, idx) => {
-    const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
-    const role = item.role || 'field';
-    const key = `${role}:${label}`;
-    const val = item.value != null ? String(item.value) : '';
-    answerCols.push(key, val); // 質問 → 回答 のペア
-  });
-
-  const row = [...baseCols, ...answerCols];
-
-  try {
-    const sheets = await getSheets();
-    const headers = await getContactRoleHeaders();
-    if (!headers.length) {
-      console.warn(
-        'appendFormQuestionsAndAnswers: Contacts シートの L1:AH1 にヘッダーがありません'
-      );
-      return;
-    }
-
-    // role→value マップ（スキーマのみ項目も含める）
-    const valueByRole = {};
-    for (const item of normalizedEntries) {
-      const role = (item.role || '').trim();
-      if (!role) continue;
-      if (valueByRole[role] == null) {
-        valueByRole[role] = item.value != null ? String(item.value) : '';
-      }
-    }
-
-    const rowValues = headers.map((roleName) => valueByRole[roleName] || '');
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `Contacts!L${rowIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [rowValues],
-      },
-    });
-  } catch (err) {
-    console.warn(
-      `appendFormQuestionsAndAnswers: Contacts シートへの書き込みに失敗`,
-      err.message || err
-    );
-  }
 }
 
 /**
@@ -376,4 +257,140 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
       values: [rowValues],
     },
   });
+}
+
+/**
+ * フォームの質問項目と入力値を FormLogs シートに 1行 追記する
+ * ついでに、Contacts シートの L列以降に role ごとの値も反映する。
+ *
+ * @param {Object} params
+ * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
+ * @param {string} params.contactUrl - 実際にアクセスした問い合わせURL
+ * @param {string} params.siteUrl - 企業サイトのURL
+ * @param {Array} params.filledSummary - fillContactForm が返した入力サマリ
+ * @param {Object} params.formSchema - analyzeContactFormWithAI の返り値
+ */
+export async function appendFormQuestionsAndAnswers(params = {}) {
+  if (!SPREADSHEET_ID) {
+    console.warn(
+      'SHEET_ID が未設定のため、フォームログ出力はスキップします'
+    );
+    return;
+  }
+
+  const {
+    contact,
+    contactUrl,
+    siteUrl,
+    filledSummary,
+    formSchema,
+  } = params;
+
+  // --- ① スキーマ(formSchema)とfilledSummaryをマージして「最終的な項目リスト」を作る ---
+
+  const mergeEntries = () => {
+    const schemaFields =
+      (formSchema?.fields || []).map((f, idx) => ({
+        ...f,
+        value: '',
+        order: idx + 1,
+      })) || [];
+
+    const summary = filledSummary || [];
+
+    const keyOf = (item) =>
+      [
+        item.role || 'field',
+        item.nameAttr || '',
+        item.idAttr || '',
+        item.label || '',
+      ].join('|');
+
+    const map = new Map();
+
+    schemaFields.forEach((item) => {
+      map.set(keyOf(item), { ...item });
+    });
+
+    summary.forEach((item) => {
+      const k = keyOf(item);
+      if (map.has(k)) {
+        map.set(k, { ...map.get(k), ...item });
+      } else {
+        map.set(k, { ...item });
+      }
+    });
+
+    return Array.from(map.values());
+  };
+
+  const entries = mergeEntries();
+  const normalizedEntries = collapseLogicalFields(entries);
+
+  if (!normalizedEntries.length) {
+    console.warn('appendFormQuestionsAndAnswers: ログ対象の項目がありません');
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+
+  // --- ② FormLogs 用の1行ぶんデータを組み立てる ---
+
+  // A〜E列: メタ情報
+  const baseCols = [
+    timestamp, // A
+    contact?.companyName || '', // B
+    contact?.rowIndex || '', // C
+    siteUrl || contact?.siteUrl || '', // D
+    contactUrl || contact?.contactUrl || '', // E
+  ];
+
+  // F列以降: 「質問(ラベル/role)」→「回答」の順で横展開
+  const answerCols = [];
+  normalizedEntries.forEach((item, idx) => {
+    const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
+    const role = item.role || 'field';
+    const key = `${role}:${label}`;
+    const val = item.value != null ? String(item.value) : '';
+    answerCols.push(key, val); // 質問 → 回答 のペア
+  });
+
+  const row = [...baseCols, ...answerCols];
+
+  try {
+    const sheets = await getSheets();
+
+    await ensureFormLogSheetExists();
+
+    // A列の最終行+1 を探して、そこに1行書き込む
+    const existing = await sheets.spreadsheets.values
+      .get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${FORM_LOG_SHEET_NAME}!A:A`,
+      })
+      .catch(() => ({ data: { values: [] } }));
+
+    const startRow =
+      (existing.data.values && existing.data.values.length) || 0;
+    const startIndex = startRow + 1; // 1-based
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${FORM_LOG_SHEET_NAME}!A${startIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [row],
+      },
+    });
+
+    // Contacts の L列以降にも role ごとの値を反映
+    if (contact && contact.rowIndex) {
+      await updateContactFormFieldLog(contact, normalizedEntries);
+    }
+  } catch (err) {
+    console.warn(
+      `appendFormQuestionsAndAnswers: ログシート/Contacts シートへの書き込みに失敗`,
+      err.message || err
+    );
+  }
 }
