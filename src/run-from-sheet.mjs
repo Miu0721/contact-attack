@@ -68,14 +68,14 @@ export async function runFromSheetJob() {
 
   try {
     for (const contact of contacts) {
-      // すでに処理済みならスキップ
-      if (
-        contact.status &&
-        contact.status !== '' &&
-        contact.status !== 'Pending'
-      ) {
+      // すでに結果が出ているものはスキップ
+      const hasStatusDone =
+        contact.status && contact.status !== '' && contact.status !== 'Pending';
+      const hasResult =
+        contact.lastResult && String(contact.lastResult).trim() !== '';
+      if (hasStatusDone || hasResult) {
         console.log(
-          `⏩ Skip: ${contact.companyName} (status=${contact.status})`
+          `⏩ Skip: ${contact.companyName} (status=${contact.status}, lastResult=${contact.lastResult})`
         );
         continue;
       }
@@ -205,13 +205,6 @@ export async function runFromSheetJob() {
           //     'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
           //   status = 'Failed';
 
-          //   await appendFormLogSafe({
-          //     contact,
-          //     contactUrl,
-          //     siteUrl: contact.siteUrl,
-          //     filledSummary,
-          //     formSchema,
-          //   });
 
           //   // 次のリンク/企業へ
           //   success = true; // これ以上のエラー通知を避けるため success として扱う
@@ -227,14 +220,14 @@ export async function runFromSheetJob() {
 
           success = true;
 
-          await appendFormLogSafe({
-            contact,
-            contactUrl,
-            siteUrl: contact.siteUrl,
-            filledSummary,
-            formSchema,
-          });
-
+        await appendFormQuestionsAndAnswers({
+          contact,
+          contactUrl,
+          siteUrl: contact.siteUrl,
+          filledSummary,
+          formSchema,
+        });
+        
           lastResult = 'filled';
           status = 'Success';
 
@@ -272,15 +265,6 @@ export async function runFromSheetJob() {
         // );
       }
 
-      // 4. シート更新
-      await updateContactRowValues(contact, {
-        contactUrl,
-        status,
-        lastRunAt: timestamp,
-        lastResult,
-        lastErrorMsg,
-        runCount,
-      });
 
       // await updateContactRowColor(contact.rowIndex, status);
 
