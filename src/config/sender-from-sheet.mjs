@@ -238,7 +238,8 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
     if (!item || !item.role) continue;
     const role = String(item.role).trim();
     if (valueByRole[role] == null && item.value != null) {
-      valueByRole[role] = String(item.value);
+      const val = String(item.value);
+      valueByRole[role] = item.required ? `required${val}` : val;
     }
   }
 
@@ -366,7 +367,8 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
     const role = item.role || 'field';
     const key = `${role}:${label}`;
-    const val = item.value != null ? String(item.value) : '';
+    const rawVal = item.value != null ? String(item.value) : '';
+    const val = item.required ? `required${rawVal}` : rawVal;
     answerCols.push(key, val); // 質問 → 回答 のペア
   });
 
