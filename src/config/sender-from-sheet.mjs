@@ -259,6 +259,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   });
 }
 
+
 /**
  * フォームの質問項目と入力値を FormLogs シートに 1行 追記する
  * ついでに、Contacts シートの L列以降に role ごとの値も反映する。
@@ -332,6 +333,20 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     return;
   }
 
+  // ★ 追加: role === 'other' のラベルを集める（Contacts!K列用）
+  const otherLabels = [];
+  normalizedEntries.forEach((item, idx) => {
+    const role = item.role || 'field';
+    if (role === 'other') {
+      const label =
+        item.label ||
+        item.nameAttr ||
+        item.idAttr ||
+        `field${idx + 1}`;
+      otherLabels.push(label);
+    }
+  });
+
   const timestamp = new Date().toISOString();
 
   // --- ② FormLogs 用の1行ぶんデータを組み立てる ---
@@ -383,8 +398,23 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
       },
     });
 
-    // Contacts の L列以降にも role ごとの値を反映
+    // Contacts の K列 & L列以降にも値を反映
     if (contact && contact.rowIndex) {
+      const rowIndex = contact.rowIndex;
+
+      // ★ 追加: Contacts の K列に "other" のラベル一覧を出力（改行区切り）
+      if (otherLabels.length > 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Contacts!K${rowIndex}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [[otherLabels.join('\n')]], // カンマ区切りにしたければ ', ' に変える
+          },
+        });
+      }
+
+      // 既存処理: role ごとの値を L列以降へ
       await updateContactFormFieldLog(contact, normalizedEntries);
     }
   } catch (err) {
