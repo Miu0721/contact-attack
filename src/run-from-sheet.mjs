@@ -67,6 +67,20 @@ async function appendFormLogSafe(params) {
   page.setDefaultNavigationTimeout(60000);
   page.setDefaultTimeout(60000);
 
+  try {
+    for (const contact of contacts) {
+      // すでに結果が出ているものはスキップ
+      const hasStatusDone =
+        contact.status && contact.status !== '' && contact.status !== 'Pending';
+      const hasResult =
+        contact.lastResult && String(contact.lastResult).trim() !== '';
+      if (hasStatusDone || hasResult) {
+        console.log(
+          `⏩ Skip: ${contact.companyName} (status=${contact.status}, lastResult=${contact.lastResult})`
+        );
+        continue;
+      }
+
       console.log(
         `🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`
       );
@@ -215,11 +229,44 @@ async function appendFormLogSafe(params) {
             JSON.stringify(filledSummary, null, 2)
           );
 
-        if (filledSummary.length === 0) {
-          console.warn('⚠️ 入力サマリが空でした');
-          lastResult = 'fill_empty';
-          lastErrorMsg = '入力できるフィールドがありませんでした';
-          continue;
+          // // reCAPTCHA 等を検出した場合はシートに記録して次のリンクへ
+          // const captchaEntry = filledSummary.find(
+          //   (f) => f.role === 'captcha'
+          // );
+          // if (captchaEntry) {
+          //   lastResult = 'captcha_detected';
+          //   lastErrorMsg =
+          //     'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
+          //   status = 'Failed';
+
+
+          //   // 次のリンク/企業へ
+          //   success = true; // これ以上のエラー通知を避けるため success として扱う
+          //   break;
+          // }
+
+          if (filledSummary.length === 0) {
+            console.warn('⚠️ 入力サマリが空でした');
+            lastResult = 'fill_empty';
+            lastErrorMsg = '入力できるフィールドがありませんでした';
+            continue;
+          }
+
+          success = true;
+
+        await appendFormQuestionsAndAnswers({
+          contact,
+          contactUrl,
+          siteUrl: contact.siteUrl,
+          filledSummary,
+          formSchema,
+        });
+        
+          lastResult = 'filled';
+          status = 'Success';
+
+          // 送信は安全のため現在無効化
+          break;
         }
 
         await appendFormLogSafe({
@@ -265,22 +312,16 @@ async function appendFormLogSafe(params) {
         // );
       }
 
-    // 4. シート更新（FormLogs とは分離）
-    await updateContactRowValues(contact, {
-      contactUrl,
-      status,
-      lastRunAt: timestamp,
-      lastResult,
-      lastErrorMsg,
-      runCount,
-    });
 
-    // await updateContactRowColor(contact.rowIndex, status);
+      // await updateContactRowColor(contact.rowIndex, status);
 
-    // 負荷・レート制御（1〜3秒待機）
-    await new Promise((r) =>
-      setTimeout(r, 1000 + Math.random() * 2000)
-    );
+      // 負荷・レート制御（1〜3秒待機）
+      await new Promise((r) =>
+        setTimeout(r, 1000 + Math.random() * 2000)
+      );
+    }
+  } finally {
+    await browser.close();
   }
 }
 

@@ -8,11 +8,19 @@ const SPREADSHEET_ID = process.env.SHEET_ID;
 
 // Sender 用のタブ名（シート名）
 const SENDER_SHEET_NAME = 'Sender';
-const FORM_LOG_SHEET_NAME = process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
+
+// フォーム項目詳細ログ用タブ名（デフォルト Contacts に書く想定）
+const FORM_LOG_SHEET_NAME =
+  process.env.FORM_LOG_SHEET_NAME || 'Contacts';
 
 let sheetsClient = null;
 let formLogSheetChecked = false;
+let contactRoleHeadersCache = null;
 
+/**
+ * ラジオボタン・チェックボックスの論理フィールドを統合する
+ * - 同じ type(=radio/checkbox) + name/id のものは 1つにまとめる
+ */
 function collapseLogicalFields(entries = []) {
   const seen = new Set();
   const result = [];
@@ -54,6 +62,27 @@ async function getSheets() {
 }
 
 /**
+ * Contacts シートの L1:AH1 から role 名のヘッダーを取得
+ * 例: ['name', 'lastName', 'firstName', ...]
+ */
+async function getContactRoleHeaders() {
+  if (contactRoleHeadersCache) return contactRoleHeadersCache;
+  if (!SPREADSHEET_ID) return [];
+
+  const sheets = await getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `Contacts!L1:AH1`,
+  });
+
+  const row = (res.data.values && res.data.values[0]) || [];
+  const headers = row.map((v) => String(v).trim()).filter(Boolean);
+
+  contactRoleHeadersCache = headers;
+  return headers;
+}
+
+/**
  * FormLogs シートが存在しなければ作成する
  */
 async function ensureFormLogSheetExists() {
@@ -86,6 +115,8 @@ async function ensureFormLogSheetExists() {
           ],
         },
       });
+
+      // （必要ならここでヘッダー A1:M1 を書く処理を足してもOK）
     }
   } catch (_err) {
     // ここでの失敗は append 側でリトライ・ログする
@@ -95,7 +126,8 @@ async function ensureFormLogSheetExists() {
 }
 
 /**
- * Sender シートから自社情報を取得
+ * Sender シートから自社情報を取得して、
+ * { senderInfo, message, companyTopUrl, contactPrompt } を返す
  */
 export async function loadSenderFromSheet() {
   if (!SPREADSHEET_ID) {
@@ -253,34 +285,95 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
   const row = [...baseCols, ...answerCols];
 
   try {
-    await ensureFormLogSheetExists();
-
     const sheets = await getSheets();
+    const headers = await getContactRoleHeaders();
+    if (!headers.length) {
+      console.warn(
+        'appendFormQuestionsAndAnswers: Contacts シートの L1:AH1 にヘッダーがありません'
+      );
+      return;
+    }
 
-    // 既存の行数を取得して、最終行+1 の行に書き込む
-    const existing = await sheets.spreadsheets.values
-      .get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${FORM_LOG_SHEET_NAME}!A:A`,
-      })
-      .catch(() => ({ data: { values: [] } }));
+    // role→value マップ（スキーマのみ項目も含める）
+    const valueByRole = {};
+    for (const item of normalizedEntries) {
+      const role = (item.role || '').trim();
+      if (!role) continue;
+      if (valueByRole[role] == null) {
+        valueByRole[role] = item.value != null ? String(item.value) : '';
+      }
+    }
 
-    const startRow =
-      (existing.data.values && existing.data.values.length) || 0;
-    const targetRow = startRow + 1; // 1-based
+    const rowValues = headers.map((roleName) => valueByRole[roleName] || '');
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${FORM_LOG_SHEET_NAME}!A${targetRow}`,
+      range: `Contacts!L${rowIndex}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [row],
+        values: [rowValues],
       },
     });
   } catch (err) {
     console.warn(
-      `appendFormQuestionsAndAnswers: シート "${FORM_LOG_SHEET_NAME}" への書き込みに失敗`,
+      `appendFormQuestionsAndAnswers: Contacts シートへの書き込みに失敗`,
       err.message || err
     );
   }
+}
+
+/**
+ * Contacts シートの L列以降に、
+ * role ごとの入力値を1行分書き込む
+ *
+ * @param {Object} contact - Contacts シート1行分のオブジェクト（rowIndex 必須）
+ * @param {Array} filledSummary - fillContactForm が返した入力サマリ
+ */
+export async function updateContactFormFieldLog(contact, filledSummary = []) {
+  if (!SPREADSHEET_ID) {
+    console.warn(
+      'SHEET_ID が未設定のため、Contacts へのフォームログ出力をスキップします'
+    );
+    return;
+  }
+  if (!contact || !contact.rowIndex) {
+    console.warn(
+      'updateContactFormFieldLog: contact.rowIndex がありません'
+    );
+    return;
+  }
+
+  const headers = await getContactRoleHeaders();
+  if (!headers.length) {
+    console.warn(
+      'updateContactFormFieldLog: Contacts シートの L1:AH1 にヘッダーがありません'
+    );
+    return;
+  }
+
+  // role → value のマップを作成
+  const valueByRole = {};
+  for (const item of filledSummary || []) {
+    if (!item || !item.role) continue;
+    const role = String(item.role).trim();
+    if (valueByRole[role] == null && item.value != null) {
+      valueByRole[role] = String(item.value);
+    }
+  }
+
+  // ヘッダー順に値を並べる。存在しない role は ''（空）にする
+  const rowValues = headers.map((roleName) => valueByRole[roleName] || '');
+
+  const sheets = await getSheets();
+  const rowIndex = contact.rowIndex;
+
+  // Contacts!L{rowIndex} から右方向に rowValues を書き込む
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `Contacts!L${rowIndex}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [rowValues],
+    },
+  });
 }
