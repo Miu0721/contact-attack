@@ -91,31 +91,135 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
 }
 
 function valueForRole(role, senderInfo, message) {
-  if (role === 'name') return senderInfo.name || '';
+  // 氏名まわり
+  if (role === 'name') {
+    return senderInfo.name || '';
+  }
+  if (role === 'lastName') {
+    return senderInfo.lastName || senderInfo.name || '';
+  }
+  if (role === 'firstName') {
+    return senderInfo.firstName || senderInfo.name || '';
+  }
+  if (role === 'nameKana') {
+    return senderInfo.nameKana || '';
+  }
+  if (role === 'lastNameKana') {
+    return senderInfo.lastNameKana || senderInfo.nameKana || '';
+  }
+  if (role === 'firstNameKana') {
+    return senderInfo.firstNameKana || senderInfo.nameKana || '';
+  }
+
+  // 旧 snake_case 互換（AI 側の role は基本ここには来ない想定だけど一応）
   if (role === 'name_kana') return senderInfo.nameKana || '';
   if (role === 'first_name') return senderInfo.firstName || senderInfo.name || '';
   if (role === 'last_name') return senderInfo.lastName || senderInfo.name || '';
   if (role === 'first_name_kana') return senderInfo.firstNameKana || senderInfo.nameKana || '';
   if (role === 'last_name_kana') return senderInfo.lastNameKana || senderInfo.nameKana || '';
-  if (role === 'email') return senderInfo.email || '';
+
+  // 連絡先系
+  if (role === 'email') {
+    return senderInfo.email || '';
+  }
+  if (role === 'phone') {
+    return senderInfo.phone || '';
+  }
+  if (role === 'personalPhone' || role === 'personal_phone') {
+    return senderInfo.personalPhone || senderInfo.phone || '';
+  }
+
+  // 会社情報系
+  if (role === 'company-name' || role === 'company_name' || role === 'companyName') {
+    return senderInfo.company || senderInfo.companyName || '';
+  }
+  if (role === 'department') {
+    return senderInfo.department || '';
+  }
+  if (role === 'position') {
+    return senderInfo.position || '';
+  }
+  if (role === 'companyTopUrl') {
+    return (
+      senderInfo.companyTopUrl ||
+      senderInfo.companyUrl ||
+      senderInfo.companyTopURL ||
+      ''
+    );
+  }
+  // 旧 role 互換
   if (role === 'company') return senderInfo.company || '';
-  if (role === 'department') return senderInfo.department || '';
-  if (role === 'phone') return senderInfo.phone || '';
-  if (role === 'company_phone') return senderInfo.companyPhone || senderInfo.phone || '';
-  if (role === 'personal_phone') return senderInfo.personalPhone || senderInfo.phone || '';
-  if (role === 'position') return senderInfo.position || '';
-  if (role === 'referral') return senderInfo.referral || '';
-  if (role === 'gender') return senderInfo.gender || '';
-  if (role === 'postal_code') return senderInfo.postalCode || '';
-  if (role === 'prefecture') return senderInfo.prefecture || '';
-  if (role === 'address') return senderInfo.address || '';
-  if (role === 'age') return senderInfo.age || '';
-  if (role === 'message') return message || '';
-  if (role === 'subject') return senderInfo.subject || '';
-  if (role === 'organization') return senderInfo.company || senderInfo.organization || '';
-  if (role === 'company_name') return senderInfo.company || '';
-  if (role === 'category' || role === 'inquiry_category') {
+  if (role === 'company_phone') {
+    return senderInfo.companyPhone || senderInfo.phone || '';
+  }
+  if (role === 'organization') {
+    return senderInfo.company || senderInfo.organization || '';
+  }
+
+  // プロファイル系
+  if (role === 'referral') {
+    return senderInfo.referral || '';
+  }
+  if (role === 'gender') {
+    return senderInfo.gender || '';
+  }
+  if (role === 'age') {
+    return senderInfo.age || '';
+  }
+
+  // 住所系
+  if (role === 'postalCode' || role === 'postal_code') {
+    return senderInfo.postalCode || '';
+  }
+  if (role === 'prefecture') {
+    return senderInfo.prefecture || '';
+  }
+  if (role === 'address') {
+    return senderInfo.address || '';
+  }
+
+  // 問い合わせカテゴリ系
+  if (role === 'inquiryCategory' || role === 'category' || role === 'inquiry_category') {
     return senderInfo.inquiryCategory || CATEGORY_LABEL;
+  }
+  if (role === 'inquiryType') {
+    return senderInfo.inquiryType || senderInfo.inquiryCategory || CATEGORY_LABEL;
+  }
+
+  // 件名・本文
+  if (role === 'subject') {
+    return senderInfo.subject || '';
+  }
+  if (role === 'message') {
+    return message || senderInfo.message || '';
+  }
+
+  // "other" や未知の role は空文字
+  return '';
+}
+
+
+// ラベルなどから推測して値を埋める簡易フォールバック
+function valueFromLabelFallback(label, senderInfo, message) {
+  const text = (label || '').toLowerCase();
+  if (!text) return '';
+
+  if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
+  if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
+  if (text.includes('電話') || text.includes('tel')) return senderInfo.phone || '';
+  if (text.includes('会社') || text.includes('法人') || text.includes('組織')) {
+    return senderInfo.company || senderInfo.organization || '';
+  }
+  if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
+  if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
+  if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
+    return senderInfo.address || '';
+  }
+  if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
+    return senderInfo.subject || '';
+  }
+  if (text.includes('内容') || text.includes('message') || text.includes('問い合わせ')) {
+    return message || '';
   }
   return '';
 }
