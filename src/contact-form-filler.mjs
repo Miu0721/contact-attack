@@ -120,57 +120,75 @@ function valueForRole(role, senderInfo, message) {
   return '';
 }
 
-function valueFromLabelFallback(label, senderInfo, message) {
-  const raw = label || '';
-  const text = raw.toLowerCase();
-  if (!text) return '';
+// async function detectRecaptcha(page) {
+//   for (const sel of RECAPTCHA_SELECTORS) {
+//     const handle = await page.$(sel);
+//     if (handle) {
+//       console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
+//       return {
+//         role: 'captcha',
+//         type: 'recaptcha',
+//         selector: sel,
+//         label: 'reCAPTCHA detected',
+//         nameAttr: '',
+//         idAttr: '',
+//         value: 'manual_action_required',
+//       };
+//     }
+//   }
+//   return null;
+// }
 
-  // 会社名 / 学校名 系（「名」と被るので先に判定）
-  if (
-    text.includes('会社名') ||
-    text.includes('学校名') ||
-    text.includes('法人名') ||
-    (text.includes('会社') || text.includes('法人') || text.includes('組織'))
-  ) {
-    return senderInfo.company || senderInfo.organization || '';
-  }
+// async function detectImageCaptchas(page) {
+//   try {
+//     return (
+//       (await page.$$eval(
+//         'input, textarea',
+//         (elems, keywords) =>
+//           elems
+//             .map((el) => {
+//               const tag = el.tagName?.toLowerCase() || '';
+//               const nameAttr = el.getAttribute('name') || '';
+//               const idAttr = el.id || '';
+//               const placeholder = el.getAttribute('placeholder') || '';
+//               const aria = el.getAttribute('aria-label') || '';
 
-  // 姓・名（raw で判定した方がわかりやすいのでそのまま使う）
-  if (raw.includes('姓')) {
-    // 苗字
-    return senderInfo.lastName || senderInfo.name || '';
-  }
-  // 「会社名」の「名」とかと被らないように、上で会社名を先に処理している前提
-  if (raw.includes('名')) {
-    // 名前（下の名前）
-    return senderInfo.firstName || senderInfo.name || '';
-  }
+//               const labelText = (() => {
+//                 if (idAttr) {
+//                   const lbl = document.querySelector(`label[for="${idAttr}"]`);
+//                   if (lbl) return lbl.innerText.trim();
+//                 }
+//                 const parentLabel = el.closest('label');
+//                 if (parentLabel) return parentLabel.innerText.trim();
+//                 return '';
+//               })();
 
-  // 氏名（フルネーム）
-  if (text.includes('氏名') || text.includes('お名前') || text.includes('名前')) {
-    return senderInfo.name || '';
-  }
+//               const combined = `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`.toLowerCase();
+//               const matched = keywords.some((k) => combined.includes(k.toLowerCase()));
+//               if (!matched) return null;
 
-  if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
-  if (text.includes('電話') || text.includes('tel')) return senderInfo.phone || '';
+//               const selector = idAttr
+//                 ? `#${idAttr}`
+//                 : nameAttr
+//                   ? `${tag}[name="${nameAttr}"]`
+//                   : tag || 'input';
 
-  if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
-  if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
-
-  if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
-    return senderInfo.address || '';
-  }
-
-  if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
-    return senderInfo.subject || '';
-  }
-
-  if (text.includes('内容') || text.includes('message') || text.includes('問い合わせ')) {
-    return message || '';
-  }
-
-  return '';
-}
+//               return {
+//                 selector,
+//                 label: labelText || placeholder || aria || '',
+//                 nameAttr,
+//                 idAttr,
+//                 type: tag || 'input',
+//               };
+//             })
+//             .filter(Boolean),
+//         IMAGE_CAPTCHA_KEYWORDS
+//       )) || []
+//     );
+//   } catch (_e) {
+//    return [];
+//   }
+// }
 
 
 // async function detectRecaptcha(page) {
@@ -465,27 +483,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   const filledSummary = [];
   let orderCounter = 1;
 
-  // // reCAPTCHA など「私はロボットではありません」を検出してログに残す
-  // const recaptcha = await detectRecaptcha(page);
-  // if (recaptcha) {
-  //   filledSummary.push({ ...recaptcha, order: 0 });
-  // }
-
-  // reCAPTCHA など画像認証を検出してログに残す
-  // const imageCaptchas = await detectImageCaptchas(page);
-  // for (const info of imageCaptchas) {
-  //   filledSummary.push({
-  //     role: 'captcha',
-  //     type: 'image_captcha',
-  //     selector: info.selector,
-  //     label: info.label,
-  //     nameAttr: info.nameAttr,
-  //     idAttr: info.idAttr,
-  //     order: 0,
-  //     value: 'manual_action_required',
-  //   });
-  //   console.log('🛡️ 画像認証/キャプチャ入力欄を検出:', info.selector);
-  // }
+  // reCAPTCHA / 画像認証検出は無効化
 
   for (const f of formSchema.fields) {
     const role = f.role;

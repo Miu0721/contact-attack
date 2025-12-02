@@ -26,8 +26,7 @@ function collapseLogicalFields(entries = []) {
   const result = [];
 
   for (const item of entries) {
-    const isGroupTarget =
-      item.type === 'radio' || item.type === 'checkbox';
+    const isGroupTarget = item.type === 'radio' || item.type === 'checkbox';
 
     if (isGroupTarget) {
       const hasAttr = item.nameAttr || item.idAttr;
@@ -53,7 +52,6 @@ async function getSheets() {
   if (sheetsClient) return sheetsClient;
 
   const auth = new google.auth.GoogleAuth({
-    // ★ contactsRepo.mjs と同じ
     keyFile: 'service-account.json',
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
@@ -182,6 +180,7 @@ export async function loadSenderFromSheet() {
     company: map.company,
     department: map.department,
     phone: map.phone,
+    organization: map.company,
   };
 
   const message = map.message;
@@ -198,13 +197,7 @@ export async function loadSenderFromSheet() {
 
 /**
  * フォームの質問項目と入力値を FormLogs シートに追記する
- *
- * @param {Object} params
- * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
- * @param {string} params.contactUrl - 実際にアクセスした問い合わせURL
- * @param {string} params.siteUrl - 企業サイトのURL
- * @param {Array} params.filledSummary - fillContactForm が返す入力サマリ
- * @param {Object} params.formSchema - analyzeContactFormWithAI の返り値
+ * 「1 URL = 1 行」横展開で記録
  */
 export async function appendFormQuestionsAndAnswers(params = {}) {
   if (!SPREADSHEET_ID) {
@@ -222,14 +215,44 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     formSchema,
   } = params;
 
-  const entries =
-    (filledSummary && filledSummary.length > 0
-      ? filledSummary
-      : (formSchema?.fields || []).map((f, idx) => ({
-          ...f,
-          value: '',
-          order: idx + 1,
-        }))) || [];
+  const mergeEntries = () => {
+    const schemaFields =
+      (formSchema?.fields || []).map((f, idx) => ({
+        ...f,
+        value: '',
+        order: idx + 1,
+      })) || [];
+
+    const summary = filledSummary || [];
+
+    // キー生成: role/name/id/label でなるべく安定させる
+    const keyOf = (item) =>
+      [
+        item.role || 'field',
+        item.nameAttr || '',
+        item.idAttr || '',
+        item.label || '',
+      ].join('|');
+
+    const map = new Map();
+
+    schemaFields.forEach((item) => {
+      map.set(keyOf(item), { ...item });
+    });
+
+    summary.forEach((item) => {
+      const k = keyOf(item);
+      if (map.has(k)) {
+        map.set(k, { ...map.get(k), ...item });
+      } else {
+        map.set(k, { ...item });
+      }
+    });
+
+    return Array.from(map.values());
+  };
+
+  const entries = mergeEntries();
 
   const normalizedEntries = collapseLogicalFields(entries);
 
@@ -238,12 +261,28 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     return;
   }
 
-  // Contacts シートの L1:AH1 ヘッダーに沿って、対象行だけ上書きする
-  const rowIndex = contact?.rowIndex;
-  if (!rowIndex) {
-    console.warn('appendFormQuestionsAndAnswers: rowIndex が不明のためスキップ');
-    return;
-  }
+  const timestamp = new Date().toISOString();
+
+  // A〜E列: メタ情報
+  const baseCols = [
+    timestamp, // A
+    contact?.companyName || '', // B
+    contact?.rowIndex || '', // C
+    siteUrl || contact?.siteUrl || '', // D
+    contactUrl || contact?.contactUrl || '', // E
+  ];
+
+  // F列以降: 「質問(ラベル/role)」→「回答」の順で横展開
+  const answerCols = [];
+  normalizedEntries.forEach((item, idx) => {
+    const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
+    const role = item.role || 'field';
+    const key = `${role}:${label}`;
+    const val = item.value != null ? String(item.value) : '';
+    answerCols.push(key, val); // 質問 → 回答 のペア
+  });
+
+  const row = [...baseCols, ...answerCols];
 
   try {
     const sheets = await getSheets();

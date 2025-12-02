@@ -29,8 +29,9 @@ async function appendFormLogSafe(params) {
   }
 }
 
-// 👇 Cloud Run / HTTP サーバから呼べるように export
-export async function runFromSheetJob() {
+// FormLog の概要を Contacts に流し込む処理は撤廃
+
+(async () => {
   // 0. Sender シートから自社情報を読み込み（失敗したら null）
   // Sender シートから情報を取得（失敗したら空オブジェクト/空文字で進む）
   const senderFromSheet = await loadSenderFromSheet().catch((err) => {
@@ -63,7 +64,7 @@ export async function runFromSheetJob() {
   // Cloud Run 前提なら headless: true を推奨
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
-  page.setDefaultNavigationTimeout(60000); // 60秒に延長
+  page.setDefaultNavigationTimeout(60000);
   page.setDefaultTimeout(60000);
 
   try {
@@ -84,25 +85,58 @@ export async function runFromSheetJob() {
         `🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`
       );
 
-      const timestamp = new Date().toISOString();
-      let runCount = (contact.runCount || 0) + 1;
+    console.log(
+      `🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`
+    );
+
+    const timestamp = new Date().toISOString();
+    let runCount = (contact.runCount || 0) + 1;
+
+    let status = 'Failed';
+    let lastResult = '';
+    let lastErrorMsg = '';
+    let contactUrl = contact.contactUrl;
+    let filledSummary = [];
+    let formSchema = null;
+
+    try {
+      // 1. サイトURLをContactsシートから取得
+      const baseUrl = contact.siteUrl || contact.contactUrl;
+      if (!baseUrl) {
+        throw new Error('Site URL / Contact URL が両方空です');
+      }
+
+      // 候補URLを取得（指定済み contactUrl を優先、無ければ探索）
+      const candidateUrls = contactUrl
+        ? [contactUrl]
+        : await findContactPageCandidates(page, baseUrl, contactPrompt);
 
       let status = 'Failed';
       let lastResult = '';
       let lastErrorMsg = '';
       let contactUrl = contact.contactUrl;
 
-      try {
-        // 1. サイトURLをContactsシートから取得
-        const baseUrl = contact.siteUrl || contact.contactUrl;
-        if (!baseUrl) {
-          console.warn(
-            'Site URL / Contact URL が両方空です。行を Failed としてスキップします。'
-          );
+        // slack通知処理
+        // await notifySlack(
+        //   `[contact-attack-bot] ❌ フォームURL特定失敗\n` +
+        //     `会社名: ${contact.companyName}\n` +
+        //     `ベースURL: ${baseUrl}\n` +
+        //     `row: ${contact.rowIndex}\n` +
+        //     `エラー: ${lastErrorMsg}`
+        // );
 
-          lastResult = 'no_base_url';
-          lastErrorMsg = 'Site URL / Contact URL が両方空です';
-          status = 'Failed';
+        // Contactsシートを更新（コンタクトページURL）
+        await updateContactRowValues(contact, {
+          contactUrl,
+          status,
+          lastRunAt: timestamp,
+          lastResult,
+          lastErrorMsg,
+          runCount,
+        });
+        continue;
+      }
+      let success = false;
 
           await updateContactRowValues(contact, {
             contactUrl,
@@ -235,23 +269,36 @@ export async function runFromSheetJob() {
           break;
         }
 
-        // フォームが入力できなかった場合、エラーを出す。
-        if (!success) {
-          status = 'Failed';
-          if (!lastResult) lastResult = 'form_not_filled';
+        await appendFormLogSafe({
+          contact,
+          contactUrl,
+          siteUrl: contact.siteUrl,
+          filledSummary,
+          formSchema,
+        });
 
-          // await notifySlack(
-          //   `[contact-attack-bot] ❌ フォーム入力に失敗\n` +
-          //     `会社名: ${contact.companyName}\n` +
-          //     `問い合わせURL候補: ${candidateUrls.join(', ')}\n` +
-          //     `row: ${contact.rowIndex}\n` +
-          //     `エラー: ${lastErrorMsg}`
-          // );
-        }
-      } catch (err) {
-        console.error('💥 Error while processing contact:', err);
-        lastResult = 'exception';
-        lastErrorMsg = String(err);
+        // const captchaEntry = filledSummary.find(
+        //   (f) => f.role === 'captcha'
+        // );
+        // if (captchaEntry) {
+        //   lastResult = 'captcha_detected';
+        //   lastErrorMsg =
+        //     'reCAPTCHA/anti-bot 要素を検出しました（手動対応が必要です）';
+        //   status = 'Failed';
+        //   success = true; // これ以上のエラー通知を避けるため success として扱う
+        //   break;
+        // }
+
+        success = true;
+        lastResult = 'filled';
+        status = 'Success';
+
+        // 送信は安全のため現在無効化
+        break;
+      }
+
+      // フォームが入力できなかった場合、エラーを出す。
+      if (!success) {
         status = 'Failed';
 
         // Slack 通知（予期しない例外）
