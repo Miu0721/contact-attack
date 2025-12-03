@@ -293,10 +293,10 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
   for (const frame of allFrames(page)) {
     for (const sel of selectors) {
       try {
-        const matchedValue = await frame.evaluate(
+        const choice = await frame.evaluate(
           ({ selector, desiredLabel }) => {
             const inputs = Array.from(document.querySelectorAll(selector)).filter(
-              (el) => el instanceof HTMLInputElement
+              (el) => el instanceof HTMLInputElement && el.type === 'radio'
             );
             if (!inputs.length) return null;
 
@@ -311,165 +311,52 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
               return '';
             };
 
-            if (desiredLabel) {
-              const exact = inputs.find((input) => getLabelText(input) === desiredLabel);
-              if (exact) return exact.value || exact.id || 'INDEX:' + inputs.indexOf(exact);
+            const norm = (s) => (s || '').trim().toLowerCase();
+            const options = inputs.map((input, idx) => ({
+              index: idx,
+              value: input.value || '',
+              id: input.id || '',
+              name: input.name || '',
+              label: getLabelText(input) || '',
+              disabled: !!input.disabled,
+            }));
 
-              const partial = inputs.find((input) => getLabelText(input).includes(desiredLabel));
-              if (partial) return partial.value || partial.id || 'INDEX:' + inputs.indexOf(partial);
+            const desired = norm(desiredLabel);
+            if (desired) {
+              const exact =
+                options.find((o) => norm(o.label) === desired) ||
+                options.find((o) => norm(o.value) === desired);
+              if (exact) return exact;
+
+              const partial =
+                options.find((o) => norm(o.label).includes(desired)) ||
+                options.find((o) => norm(o.value).includes(desired));
+              if (partial) return partial;
             }
 
-            const first = inputs.find((input) => !input.disabled);
-            if (!first) return null;
-            return first.value || first.id || 'INDEX:0';
+            const firstEnabled = options.find((o) => !o.disabled);
+            return firstEnabled || options[0];
           },
           { selector: sel, desiredLabel: value }
         );
 
-        if (!matchedValue) continue;
+        if (!choice) continue;
 
-        if (matchedValue.startsWith('INDEX:')) {
-          const index = Number(matchedValue.replace('INDEX:', ''));
-          const handles = await frame.$$(sel);
-          if (handles[index]) {
-            await handles[index].check({ force: true });
-            const labelInfo = await frame.evaluate(
-              ({ selector, idx }) => {
-                const inputs = Array.from(document.querySelectorAll(selector)).filter(
-                  (el) => el instanceof HTMLInputElement
-                );
-                const target = inputs[idx];
-                if (!target) return '';
-                const getLabelText = (input) => {
-                  const id = input.id;
-                  if (id) {
-                    const lbl = document.querySelector(`label[for="${id}"]`);
-                    if (lbl) return lbl.innerText.trim();
-                  }
-                  const parentLabel = input.closest('label');
-                  if (parentLabel) return parentLabel.innerText.trim();
-                  return '';
-                };
-                return (
-                  getLabelText(target) ||
-                  target.value ||
-                  target.id ||
-                  target.name ||
-                  ''
-                );
-              },
-              { selector: sel, idx: index }
-            );
-            console.log(
-              `🔘 Checked radio(index=${index}) for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
-            );
-            filledSummary.push({
-              ...meta,
-              selector: sel,
-              value: labelInfo || matchedValue,
-            });
-            return true;
-          }
-        } else {
-          const loc = frame.locator(`${sel}[value="${matchedValue}"], ${sel}#${matchedValue}`);
-          if (await loc.count()) {
-            await loc.first().check({ force: true }).catch(() => loc.first().click({ force: true }));
-            const labelInfo = await frame.evaluate(
-              ({ selector, val }) => {
-                const inputs = Array.from(document.querySelectorAll(selector)).filter(
-                  (el) => el instanceof HTMLInputElement
-                );
-                const target = inputs.find(
-                  (input) => input.value === val || input.id === val
-                );
-                if (!target) return '';
-                const getLabelText = (input) => {
-                  const id = input.id;
-                  if (id) {
-                    const lbl = document.querySelector(`label[for="${id}"]`);
-                    if (lbl) return lbl.innerText.trim();
-                  }
-                  const parentLabel = input.closest('label');
-                  if (parentLabel) return parentLabel.innerText.trim();
-                  return '';
-                };
-                return (
-                  getLabelText(target) ||
-                  target.value ||
-                  target.id ||
-                  target.name ||
-                  ''
-                );
-              },
-              { selector: sel, val: matchedValue }
-            );
-            console.log(
-              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
-            );
-            filledSummary.push({
-              ...meta,
-              selector: sel,
-              value: labelInfo || matchedValue,
-            });
-            return true;
-          }
-
-          const changed = await frame.evaluate(
-            ({ selector, val }) => {
-              const inputs = Array.from(document.querySelectorAll(selector)).filter(
-                (el) => el instanceof HTMLInputElement
-              );
-              for (const input of inputs) {
-                if (input.value === val || input.id === val) {
-                  input.checked = true;
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-                  return true;
-                }
-              }
-              return false;
-            },
-            { selector: sel, val: matchedValue }
+        const handles = await frame.$$(sel);
+        const handle = handles[choice.index];
+        if (handle) {
+          await handle.check({ force: true });
+          const choiceLabel =
+            choice.label || choice.value || choice.id || choice.name || 'selected';
+          console.log(
+            `🔘 Checked radio(index=${choice.index}) for role="${meta.role}" via ${sel} (choice="${choiceLabel}") (frame: ${frame.url()})`
           );
-          if (changed) {
-            const labelInfo = await frame.evaluate(
-              ({ selector, val }) => {
-                const inputs = Array.from(document.querySelectorAll(selector)).filter(
-                  (el) => el instanceof HTMLInputElement
-                );
-                const target = inputs.find(
-                  (input) => input.value === val || input.id === val
-                );
-                if (!target) return '';
-                const getLabelText = (input) => {
-                  const id = input.id;
-                  if (id) {
-                    const lbl = document.querySelector(`label[for="${id}"]`);
-                    if (lbl) return lbl.innerText.trim();
-                  }
-                  const parentLabel = input.closest('label');
-                  if (parentLabel) return parentLabel.innerText.trim();
-                  return '';
-                };
-                return (
-                  getLabelText(target) ||
-                  target.value ||
-                  target.id ||
-                  target.name ||
-                  ''
-                );
-              },
-              { selector: sel, val: matchedValue }
-            );
-            console.log(
-              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
-            );
-            filledSummary.push({
-              ...meta,
-              selector: sel,
-              value: labelInfo || matchedValue,
-            });
-            return true;
-          }
+          filledSummary.push({
+            ...meta,
+            selector: sel,
+            value: choiceLabel,
+          });
+          return true;
         }
       } catch (_e) {
         // try next
