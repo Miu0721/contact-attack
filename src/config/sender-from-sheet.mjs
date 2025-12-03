@@ -76,7 +76,7 @@ async function getContactRoleHeaders() {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     // L列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
-    range: `Contacts!L1:ZZ1`,
+    range: `Contacts!L1:AK1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -192,6 +192,8 @@ export async function loadSenderFromSheet() {
     department: map.department,
     phone: map.phone,
     companyType: map.companyType,
+    postalCode1: map.postalCode1,
+    postalCode2: map.postalCode2,
   };
 
   const message = map.message;

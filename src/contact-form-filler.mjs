@@ -85,6 +85,10 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
 }
 
 function valueForRole(role, senderInfo, message) {
+  const postalCode1 = senderInfo.postalCode1 || '';
+  const postalCode2 = senderInfo.postalCode2 || '';
+  const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
+
   // 氏名まわり
   if (role === 'name') {
     return senderInfo.name || '';
@@ -165,8 +169,14 @@ function valueForRole(role, senderInfo, message) {
   }
 
   // 住所系
+  if (role === 'postalCode1' || role === 'postal_code1') {
+    return postalCode1 || '';
+  }
+  if (role === 'postalCode2' || role === 'postal_code2') {
+    return postalCode2 || '';
+  }
   if (role === 'postalCode' || role === 'postal_code') {
-    return senderInfo.postalCode || '';
+    return combinedPostalCode || '';
   }
   if (role === 'prefecture') {
     return senderInfo.prefecture || '';
