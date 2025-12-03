@@ -176,11 +176,13 @@ function valueForRole(role, senderInfo, message) {
   }
 
   // 問い合わせカテゴリ系
-  if (role === 'inquiryCategory' || role === 'category' || role === 'inquiry_category') {
+  /**
+   * if (role === 'inquiryCategory' || role === 'category' || role === 'inquiry_category') {
     return senderInfo.inquiryCategory || CATEGORY_LABEL;
   }
+    **/ 
   if (role === 'inquiryType') {
-    return senderInfo.inquiryType || senderInfo.inquiryCategory || CATEGORY_LABEL;
+    return senderInfo.inquiryType || CATEGORY_LABEL;
   }
 
   // 件名・本文

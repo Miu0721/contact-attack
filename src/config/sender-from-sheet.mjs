@@ -181,7 +181,7 @@ export async function loadSenderFromSheet() {
     referral: map.referral,
     gender: map.gender,
     companyType: map.companyType,
-    inquiryCategory: map.inquiryCategory,
+    // inquiryCategory: map.inquiryCategory,
     subject: map.subject,
     postalCode: map.postalCode,
     prefecture: map.prefecture,

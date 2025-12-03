@@ -222,7 +222,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "prefecture"
         - "address"
         - "age"
-        - "inquiryCategory"
+        // - "inquiryCategory"
         - "subject"
         - "inquiryType"
         - "message"
@@ -253,7 +253,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 都道府県のみを入力させる項目 → "prefecture"
         - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
         - 年齢・ご年齢・年代 → "age"
-        - 「お問い合わせ区分」「ご用件区分」「カテゴリ」などカテゴリ選択 → "inquiryCategory"
+        // - 「お問い合わせ区分」「ご用件区分」「カテゴリ」などカテゴリ選択 → "inquiryCategory"
         - 「お問い合わせ種別」「お問い合わせの種類」など種別選択 → "inquiryType"
         - 件名・タイトル → "subject"
         - お問い合わせ内容・ご質問内容・ご相談内容 → "message"
@@ -281,7 +281,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         「1つの論理的フィールド」として扱ってください。
       - ラベルや周辺テキストから role を判定できる場合は付与し、
         判定できない場合は "other" にしてください。
-      - role が "inquiryCategory" または "inquiryType" で、type が radio/checkbox/select の場合、
+      - role が "inquiryType" で、type が radio/checkbox/select の場合、
         選択肢ラベルのうち **AI が選ぶべきもの** を 1 つ決め、フィールドに "preferredOption" で入れてください。
         - 選ぶ優先順位: 「営業」「セールス」「販売代行」など営業関連キーワードがある選択肢を最優先。
         - 営業関連が見つからなければ、「その他」「その他・その他」「その他(その他)」などの「その他」系を選んでください。
@@ -303,7 +303,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       - "required" は、そのフィールドが必須なら true、そうでなければ false にしてください（判定できない場合も false）。
       - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
         - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
-      - radio/checkbox/select で role が inquiryCategory / inquiryType の場合は、
+      - radio/checkbox/select で role が inquiryType の場合は、
         "preferredOption" に **選択肢の表示テキスト** を 1 つ入れてください（わからなければ ""）。
       
       出力すべき JSON の構造（例：中身の値はダミーです）:
