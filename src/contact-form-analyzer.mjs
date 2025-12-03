@@ -226,6 +226,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "subject"
         - "inquiryType"
         - "message"
+        - "companyType"
         - どれにも当てはまらない場合だけ "other"
 
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
@@ -241,6 +242,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - メールアドレス → "email"
         - 会社名・法人名・組織名 → "company-name"
         - 部署名 → "department"
+        - 法人 / 個人などの種別 → "companyType"
         - 電話番号（会社代表・連絡先としか書いていない場合を含む） → "phone"
         - 会社ホームページURL・コーポレートサイトURL → "companyTopUrl"
         - 担当者の個人携帯・個人電話番号と明記されている場合 → "personalPhone"

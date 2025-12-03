@@ -2,13 +2,7 @@
 
 // 「お問い合わせ種別」で選びたいラベル
 const CATEGORY_LABEL = '案件のご依頼';
-// const RECAPTCHA_SELECTORS = [
-//   'iframe[src*="google.com/recaptcha"]',
-//   'div.g-recaptcha',
-//   'div.recaptcha',
-//   'input[aria-label*="not a robot" i]',
-//   'input[aria-label*="ロボットではありません"]',
-// ];
+
 
 const IMAGE_CAPTCHA_KEYWORDS = [
   'captcha',
@@ -136,6 +130,9 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'department') {
     return senderInfo.department || '';
   }
+  if (role === 'companyType' || role === 'company_type') {
+    return senderInfo.companyType || '';
+  }
   if (role === 'position') {
     return senderInfo.position || '';
   }
@@ -207,6 +204,9 @@ function valueFromLabelFallback(label, senderInfo, message) {
   if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
   if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
   if (text.includes('電話') || text.includes('tel')) return senderInfo.phone || '';
+  if ((text.includes('法人') && text.includes('個人')) || text.includes('法人／個人')) {
+    return senderInfo.companyType || '';
+  }
   if (text.includes('会社') || text.includes('法人') || text.includes('組織')) {
     return senderInfo.company || senderInfo.organization || '';
   }
@@ -224,156 +224,58 @@ function valueFromLabelFallback(label, senderInfo, message) {
   return '';
 }
 
-// async function detectRecaptcha(page) {
-//   for (const sel of RECAPTCHA_SELECTORS) {
-//     const handle = await page.$(sel);
-//     if (handle) {
-//       console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
-//       return {
-//         role: 'captcha',
-//         type: 'recaptcha',
-//         selector: sel,
-//         label: 'reCAPTCHA detected',
-//         nameAttr: '',
-//         idAttr: '',
-//         value: 'manual_action_required',
-//       };
-//     }
-//   }
-//   return null;
-// }
 
-// async function detectImageCaptchas(page) {
-//   try {
-//     return (
-//       (await page.$$eval(
-//         'input, textarea',
-//         (elems, keywords) =>
-//           elems
-//             .map((el) => {
-//               const tag = el.tagName?.toLowerCase() || '';
-//               const nameAttr = el.getAttribute('name') || '';
-//               const idAttr = el.id || '';
-//               const placeholder = el.getAttribute('placeholder') || '';
-//               const aria = el.getAttribute('aria-label') || '';
-
-//               const labelText = (() => {
-//                 if (idAttr) {
-//                   const lbl = document.querySelector(`label[for="${idAttr}"]`);
-//                   if (lbl) return lbl.innerText.trim();
-//                 }
-//                 const parentLabel = el.closest('label');
-//                 if (parentLabel) return parentLabel.innerText.trim();
-//                 return '';
-//               })();
-
-//               const combined = `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`.toLowerCase();
-//               const matched = keywords.some((k) => combined.includes(k.toLowerCase()));
-//               if (!matched) return null;
-
-//               const selector = idAttr
-//                 ? `#${idAttr}`
-//                 : nameAttr
-//                   ? `${tag}[name="${nameAttr}"]`
-//                   : tag || 'input';
-
-//               return {
-//                 selector,
-//                 label: labelText || placeholder || aria || '',
-//                 nameAttr,
-//                 idAttr,
-//                 type: tag || 'input',
-//               };
-//             })
-//             .filter(Boolean),
-//         IMAGE_CAPTCHA_KEYWORDS
-//       )) || []
-//     );
-//   } catch (_e) {
-//    return [];
-//   }
-// }
-
-
-// async function detectRecaptcha(page) {
-//   for (const sel of RECAPTCHA_SELECTORS) {
-//     const handle = await page.$(sel);
-//     if (handle) {
-//       console.log('🛡️ reCAPTCHA/anti-bot 要素を検出!:', sel);
-//       return {
-//         role: 'captcha',
-//         type: 'recaptcha',
-//         selector: sel,
-//         label: 'reCAPTCHA detected',
-//         nameAttr: '',
-//         idAttr: '',
-//         value: 'manual_action_required',
-//       };
-//     }
-//   }
-//   return null;
-// }
-
-// async function detectImageCaptchas(page) {
-//   try {
-//     return (
-//       (await page.$$eval(
-//         'input, textarea',
-//         (elems, keywords) =>
-//           elems
-//             .map((el) => {
-//               const tag = el.tagName?.toLowerCase() || '';
-//               const nameAttr = el.getAttribute('name') || '';
-//               const idAttr = el.id || '';
-//               const placeholder = el.getAttribute('placeholder') || '';
-//               const aria = el.getAttribute('aria-label') || '';
-
-//               const labelText = (() => {
-//                 if (idAttr) {
-//                   const lbl = document.querySelector(`label[for="${idAttr}"]`);
-//                   if (lbl) return lbl.innerText.trim();
-//                 }
-//                 const parentLabel = el.closest('label');
-//                 if (parentLabel) return parentLabel.innerText.trim();
-//                 return '';
-//               })();
-
-//               const combined = `${nameAttr} ${idAttr} ${placeholder} ${aria} ${labelText}`.toLowerCase();
-//               const matched = keywords.some((k) => combined.includes(k.toLowerCase()));
-//               if (!matched) return null;
-
-//               const selector = idAttr
-//                 ? `#${idAttr}`
-//                 : nameAttr
-//                   ? `${tag}[name="${nameAttr}"]`
-//                   : tag || 'input';
-
-//               return {
-//                 selector,
-//                 label: labelText || placeholder || aria || '',
-//                 nameAttr,
-//                 idAttr,
-//                 type: tag || 'input',
-//               };
-//             })
-//             .filter(Boolean),
-//         IMAGE_CAPTCHA_KEYWORDS
-//       )) || []
-//     );
-//   } catch (_e) {
-//     return [];
-//   }
-// }
 
 async function fillCheckbox(page, selectors, meta, filledSummary) {
   for (const frame of allFrames(page)) {
     for (const sel of selectors) {
       try {
-        await frame.check(sel, { force: true, timeout: 5000 });
-        console.log(
-          `☑️ Checked checkbox for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+        const targetInfo = await frame.evaluate(
+          ({ selector }) => {
+            const inputs = Array.from(document.querySelectorAll(selector)).filter(
+              (el) => el instanceof HTMLInputElement
+            );
+            if (!inputs.length) return null;
+
+            const candidate = inputs.find((i) => !i.disabled) || inputs[0];
+            const getLabelText = (input) => {
+              const id = input.id;
+              if (id) {
+                const lbl = document.querySelector(`label[for="${id}"]`);
+                if (lbl) return lbl.innerText.trim();
+              }
+              const parentLabel = input.closest('label');
+              if (parentLabel) return parentLabel.innerText.trim();
+              return '';
+            };
+
+            return {
+              index: inputs.indexOf(candidate),
+              value: candidate.value || '',
+              id: candidate.id || '',
+              name: candidate.name || '',
+              label: getLabelText(candidate) || '',
+            };
+          },
+          { selector: sel }
         );
-        filledSummary.push({ ...meta, selector: sel, value: 'checked' });
+
+        const handles = await frame.$$(sel);
+        const handle = targetInfo ? handles[targetInfo.index] : handles[0];
+        if (!handle) continue;
+
+        await handle.check({ force: true });
+        const choiceLabel =
+          targetInfo?.label ||
+          targetInfo?.value ||
+          targetInfo?.id ||
+          targetInfo?.name ||
+          'checked';
+
+        console.log(
+          `☑️ Checked checkbox for role="${meta.role}" via ${sel} (choice="${choiceLabel}") (frame: ${frame.url()})`
+        );
+        filledSummary.push({ ...meta, selector: sel, value: choiceLabel });
         return true;
       } catch (_e) {
         // try next selector/frame
@@ -431,20 +333,84 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
           const handles = await frame.$$(sel);
           if (handles[index]) {
             await handles[index].check({ force: true });
-            console.log(
-              `🔘 Checked radio(index=${index}) for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+            const labelInfo = await frame.evaluate(
+              ({ selector, idx }) => {
+                const inputs = Array.from(document.querySelectorAll(selector)).filter(
+                  (el) => el instanceof HTMLInputElement
+                );
+                const target = inputs[idx];
+                if (!target) return '';
+                const getLabelText = (input) => {
+                  const id = input.id;
+                  if (id) {
+                    const lbl = document.querySelector(`label[for="${id}"]`);
+                    if (lbl) return lbl.innerText.trim();
+                  }
+                  const parentLabel = input.closest('label');
+                  if (parentLabel) return parentLabel.innerText.trim();
+                  return '';
+                };
+                return (
+                  getLabelText(target) ||
+                  target.value ||
+                  target.id ||
+                  target.name ||
+                  ''
+                );
+              },
+              { selector: sel, idx: index }
             );
-            filledSummary.push({ ...meta, selector: sel, value: matchedValue });
+            console.log(
+              `🔘 Checked radio(index=${index}) for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
+            );
+            filledSummary.push({
+              ...meta,
+              selector: sel,
+              value: labelInfo || matchedValue,
+            });
             return true;
           }
         } else {
           const loc = frame.locator(`${sel}[value="${matchedValue}"], ${sel}#${matchedValue}`);
           if (await loc.count()) {
             await loc.first().check({ force: true }).catch(() => loc.first().click({ force: true }));
-            console.log(
-              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+            const labelInfo = await frame.evaluate(
+              ({ selector, val }) => {
+                const inputs = Array.from(document.querySelectorAll(selector)).filter(
+                  (el) => el instanceof HTMLInputElement
+                );
+                const target = inputs.find(
+                  (input) => input.value === val || input.id === val
+                );
+                if (!target) return '';
+                const getLabelText = (input) => {
+                  const id = input.id;
+                  if (id) {
+                    const lbl = document.querySelector(`label[for="${id}"]`);
+                    if (lbl) return lbl.innerText.trim();
+                  }
+                  const parentLabel = input.closest('label');
+                  if (parentLabel) return parentLabel.innerText.trim();
+                  return '';
+                };
+                return (
+                  getLabelText(target) ||
+                  target.value ||
+                  target.id ||
+                  target.name ||
+                  ''
+                );
+              },
+              { selector: sel, val: matchedValue }
             );
-            filledSummary.push({ ...meta, selector: sel, value: matchedValue });
+            console.log(
+              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
+            );
+            filledSummary.push({
+              ...meta,
+              selector: sel,
+              value: labelInfo || matchedValue,
+            });
             return true;
           }
 
@@ -465,10 +431,43 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
             { selector: sel, val: matchedValue }
           );
           if (changed) {
-            console.log(
-              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+            const labelInfo = await frame.evaluate(
+              ({ selector, val }) => {
+                const inputs = Array.from(document.querySelectorAll(selector)).filter(
+                  (el) => el instanceof HTMLInputElement
+                );
+                const target = inputs.find(
+                  (input) => input.value === val || input.id === val
+                );
+                if (!target) return '';
+                const getLabelText = (input) => {
+                  const id = input.id;
+                  if (id) {
+                    const lbl = document.querySelector(`label[for="${id}"]`);
+                    if (lbl) return lbl.innerText.trim();
+                  }
+                  const parentLabel = input.closest('label');
+                  if (parentLabel) return parentLabel.innerText.trim();
+                  return '';
+                };
+                return (
+                  getLabelText(target) ||
+                  target.value ||
+                  target.id ||
+                  target.name ||
+                  ''
+                );
+              },
+              { selector: sel, val: matchedValue }
             );
-            filledSummary.push({ ...meta, selector: sel, value: matchedValue });
+            console.log(
+              `🔘 Checked radio(value="${matchedValue}") for role="${meta.role}" via ${sel} (choice="${labelInfo || matchedValue}") (frame: ${frame.url()})`
+            );
+            filledSummary.push({
+              ...meta,
+              selector: sel,
+              value: labelInfo || matchedValue,
+            });
             return true;
           }
         }
