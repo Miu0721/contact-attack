@@ -75,7 +75,8 @@ async function getContactRoleHeaders() {
   const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `Contacts!L1:AH1`,
+    // L列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
+    range: `Contacts!L1:ZZ1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -179,6 +180,7 @@ export async function loadSenderFromSheet() {
     personalPhone: map.personalPhone,
     referral: map.referral,
     gender: map.gender,
+    companyType: map.companyType,
     inquiryCategory: map.inquiryCategory,
     subject: map.subject,
     postalCode: map.postalCode,
@@ -189,6 +191,7 @@ export async function loadSenderFromSheet() {
     company: map.company,
     department: map.department,
     phone: map.phone,
+    companyType: map.companyType,
   };
 
   const message = map.message;
@@ -253,6 +256,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `Contacts!L${rowIndex}`,
+    // ヘッダー数ぶんを書き込むので右端まで自動で広がる
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [rowValues],
