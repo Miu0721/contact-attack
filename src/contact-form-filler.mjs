@@ -374,58 +374,93 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
   for (const frame of allFrames(page)) {
     for (const sel of selectors) {
       try {
+        // セレクタが存在しない frame はスキップ
         const handle = await frame.$(sel);
         if (!handle) continue;
 
-        const matchedValue = await frame.evaluate(
+        // ① ラベル(value 引数)から一致する option を探す（テキストベース）
+        const matched = await frame.evaluate(
           ({ selector, label }) => {
             const el = document.querySelector(selector);
             if (!el || !(el instanceof HTMLSelectElement)) return null;
 
-            const options = Array.from(el.options);
-            const exact = options.find((o) => o.text.trim() === label);
-            if (exact) return exact.value;
+            const options = Array.from(el.options).map((o) => ({
+              value: o.value,
+              label: o.textContent.trim(),
+            }));
 
-            const partial = options.find((o) => o.text.includes(label));
-            if (partial) return partial.value;
+            // 完全一致
+            let found = options.find((o) => o.label === label);
+            if (found) return found;
+
+            // 部分一致
+            found = options.find((o) => o.label.includes(label));
+            if (found) return found;
 
             return null;
           },
           { selector: sel, label: value }
         );
 
-        if (matchedValue) {
-          await frame.selectOption(sel, matchedValue);
+        if (matched) {
+          // value で実際に select する
+          await frame.selectOption(sel, matched.value);
+
           console.log(
-            `🔽 Selected "${value}" for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+            `🔽 Selected "${matched.label}" (value="${matched.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
           );
-          filledSummary.push({ ...meta, selector: sel, value: matchedValue || value });
+
+          // filledSummary には「人間が見るラベル」を優先して残す
+          filledSummary.push({
+            ...meta,
+            selector: sel,
+            value: matched.label,      // 表示テキスト
+            optionValue: matched.value // HTML の value 属性（おまけ）
+          });
+
           return true;
         }
 
-        const fallbackValue = await frame.evaluate(
+        // ② fallback: 「選択してください」以外の最初の option を選ぶ
+        const fallback = await frame.evaluate(
           ({ selector }) => {
             const el = document.querySelector(selector);
             if (!el || !(el instanceof HTMLSelectElement)) return null;
-            const options = Array.from(el.options).filter((o) => {
-              const t = o.text.trim();
-              return t && !/選択してください|please select/i.test(t);
-            });
-            return options[0]?.value ?? null;
+
+            const options = Array.from(el.options)
+              .map((o) => ({
+                value: o.value,
+                label: o.textContent.trim(),
+              }))
+              .filter((o) => {
+                const t = o.label;
+                return t && !/選択してください|please select/i.test(t);
+              });
+
+            return options[0] || null;
           },
           { selector: sel }
         );
 
-        if (fallbackValue) {
-          await frame.selectOption(sel, fallbackValue);
+        if (fallback) {
+          await frame.selectOption(sel, fallback.value);
+
           console.log(
-            `🔽 Fallback select (first non-placeholder) for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+            `🔽 Fallback select "${fallback.label}" (value="${fallback.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
           );
-          filledSummary.push({ ...meta, selector: sel, value: fallbackValue });
+
+          filledSummary.push({
+            ...meta,
+            selector: sel,
+            value: fallback.label,
+            optionValue: fallback.value,
+            isFallback: true
+          });
+
           return true;
         }
       } catch (_e) {
-        // try next
+        // この selector / frame はあきらめて次へ
       }
     }
   }
