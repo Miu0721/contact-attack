@@ -231,33 +231,63 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
     for (const sel of selectors) {
       try {
         const targetInfo = await frame.evaluate(
-          ({ selector }) => {
+          ({ selector, desiredLabel }) => {
             const inputs = Array.from(document.querySelectorAll(selector)).filter(
               (el) => el instanceof HTMLInputElement
             );
             if (!inputs.length) return null;
 
-            const candidate = inputs.find((i) => !i.disabled) || inputs[0];
             const getLabelText = (input) => {
               const id = input.id;
               if (id) {
                 const lbl = document.querySelector(`label[for="${id}"]`);
-                if (lbl) return lbl.innerText.trim();
+                if (lbl) {
+                  const fullLabel = lbl.textContent?.trim() || '';
+                  if (fullLabel) return fullLabel;
+                }
               }
               const parentLabel = input.closest('label');
-              if (parentLabel) return parentLabel.innerText.trim();
+              if (parentLabel) {
+                const fullLabel = parentLabel.textContent?.trim() || '';
+                if (fullLabel) return fullLabel;
+              }
+              const parent = input.parentElement;
+              if (parent) {
+                const text = parent.textContent?.trim() || '';
+                if (text) return text;
+              }
               return '';
             };
 
+            const options = inputs.map((input, idx) => ({
+              index: idx,
+              value: input.value || '',
+              id: input.id || '',
+              name: input.name || '',
+              label: getLabelText(input) || input.getAttribute('aria-label') || '',
+              disabled: !!input.disabled,
+            }));
+
+            const norm = (s) => (s || '').trim().toLowerCase();
+            const desired = norm(desiredLabel);
+            let candidate =
+              options.find((o) => desired && norm(o.label) === desired) ||
+              options.find((o) => desired && norm(o.label).includes(desired)) ||
+              options.find((o) => !o.disabled) ||
+              options[0];
+            if (!candidate) return null;
+
+            const inputEl = inputs[candidate.index];
+            const label = inputEl
+              ? getLabelText(inputEl) || inputEl.getAttribute('aria-label') || ''
+              : '';
+
             return {
-              index: inputs.indexOf(candidate),
-              value: candidate.value || '',
-              id: candidate.id || '',
-              name: candidate.name || '',
-              label: getLabelText(candidate) || '',
+              ...candidate,
+              label,
             };
           },
-          { selector: sel }
+          { selector: sel, desiredLabel: meta.desiredLabel || '' }
         );
 
         const handles = await frame.$$(sel);
@@ -521,14 +551,24 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
     if (!role) continue;
 
     const selectors = selectorsForField(type, nameAttr, idAttr);
-    const meta = { role, type, label, nameAttr, idAttr, order: orderCounter++ };
+    const preferredOption =
+      f.preferredOption || f.preferredOptionLabel || f.choiceToSelect || '';
+    const meta = {
+      role,
+      type,
+      label,
+      nameAttr,
+      idAttr,
+      order: orderCounter++,
+      desiredLabel: preferredOption,
+    };
 
     if (type === 'checkbox') {
       await fillCheckbox(page, selectors, meta, filledSummary);
       continue;
     }
 
-    let value = valueForRole(role, senderInfo, message);
+    let value = preferredOption || valueForRole(role, senderInfo, message);
     if (!value && type !== 'select' && type !== 'radio') {
       // role が other などで空だった場合、ラベルから推測する簡易フォールバック
       value = valueFromLabelFallback(label, senderInfo, message);

@@ -281,6 +281,10 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         「1つの論理的フィールド」として扱ってください。
       - ラベルや周辺テキストから role を判定できる場合は付与し、
         判定できない場合は "other" にしてください。
+      - role が "inquiryCategory" または "inquiryType" で、type が radio/checkbox/select の場合、
+        選択肢ラベルのうち **AI が選ぶべきもの** を 1 つ決め、フィールドに "preferredOption" で入れてください。
+        - 選ぶ優先順位: 「営業」「セールス」「販売代行」など営業関連キーワードがある選択肢を最優先。
+        - 営業関連が見つからなければ、「その他」「その他・その他」「その他(その他)」などの「その他」系を選んでください。
       
       ## 重要な制約（必ず守ること）
       - **入力フィールドが 1つ以上存在する場合は、"fields" 配列を空 [] のまま返してはいけません。**
@@ -299,6 +303,8 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       - "required" は、そのフィールドが必須なら true、そうでなければ false にしてください（判定できない場合も false）。
       - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
         - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
+      - radio/checkbox/select で role が inquiryCategory / inquiryType の場合は、
+        "preferredOption" に **選択肢の表示テキスト** を 1 つ入れてください（わからなければ ""）。
       
       出力すべき JSON の構造（例：中身の値はダミーです）:
       
@@ -319,6 +325,15 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
             "label": "メールアドレス",
             "role": "email",
             "required": true
+          },
+          {
+            "nameAttr": "type",
+            "idAttr": "",
+            "type": "radio",
+            "label": "お問い合わせ種別",
+            "role": "inquiryType",
+            "required": false,
+            "preferredOption": "案件のご依頼"
           }
         ]
       }
