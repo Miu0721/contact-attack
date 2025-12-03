@@ -87,7 +87,11 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
 function valueForRole(role, senderInfo, message) {
   const postalCode1 = senderInfo.postalCode1 || '';
   const postalCode2 = senderInfo.postalCode2 || '';
-  const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
+  const phone1 = senderInfo.phone1 || '';
+  const phone2 = senderInfo.phone2 || '';
+  const phone3 = senderInfo.phone3 || '';
+  // const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
+
 
   // 氏名まわり
   if (role === 'name') {
@@ -124,7 +128,7 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.phone || '';
   }
   if (role === 'personalPhone' || role === 'personal_phone') {
-    return senderInfo.personalPhone || senderInfo.phone || '';
+    return senderInfo.personalPhone || combinedPhone || senderInfo.phone || '';
   }
 
   // 会社情報系
@@ -177,6 +181,15 @@ function valueForRole(role, senderInfo, message) {
   }
   if (role === 'postalCode' || role === 'postal_code') {
     return combinedPostalCode || '';
+  }
+  if (role === 'phone1') {
+    return phone1 || '';
+  }
+  if (role === 'phone2') {
+    return phone2 || '';
+  }
+  if (role === 'phone3') {
+    return phone3 || '';
   }
   if (role === 'prefecture') {
     return senderInfo.prefecture || '';

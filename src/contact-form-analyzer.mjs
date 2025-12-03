@@ -229,6 +229,9 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "inquiryType"
         - "message"
         - "companyType"
+        - "phone1"
+        - "phone2"
+        - "phone3"
         - どれにも当てはまらない場合だけ "other"
 
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
@@ -253,6 +256,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 性別 → "gender"
         - 郵便番号・〒（1入力の場合） → "postalCode"
         - 郵便番号の前半・後半（2入力の場合） → "postalCode1" / "postalCode2"
+        - 電話番号の前半・中半・後半（3入力の場合） → "phone1" / "phone2" / "phone3"
         - 都道府県のみを入力させる項目 → "prefecture"
         - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
         - 年齢・ご年齢・年代 → "age"
