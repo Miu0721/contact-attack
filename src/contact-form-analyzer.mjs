@@ -249,11 +249,11 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 役職（部長・課長・代表取締役 など） → "position"
         - 当社をどこで知りましたか・紹介元・流入経路 → "referral"
         - 性別 → "gender"
-        - 郵便番号・〒 → "postalCode"
+        - 郵便番号・〒（1入力の場合） → "postalCode"
+        - 郵便番号の前半・後半（2入力の場合） → "postalCode1" / "postalCode2"
         - 都道府県のみを入力させる項目 → "prefecture"
         - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
         - 年齢・ご年齢・年代 → "age"
-        // - 「お問い合わせ区分」「ご用件区分」「カテゴリ」などカテゴリ選択 → "inquiryCategory"
         - 「お問い合わせ種別」「お問い合わせの種類」など種別選択 → "inquiryType"
         - 件名・タイトル → "subject"
         - お問い合わせ内容・ご質問内容・ご相談内容 → "message"
@@ -285,6 +285,10 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         選択肢ラベルのうち **AI が選ぶべきもの** を 1 つ決め、フィールドに "preferredOption" で入れてください。
         - 選ぶ優先順位: 「営業」「セールス」「販売代行」など営業関連キーワードがある選択肢を最優先。
         - 営業関連が見つからなければ、「その他」「その他・その他」「その他(その他)」などの「その他」系を選んでください。
+      - 郵便番号フィールドの判定ルール：
+        - 同じ郵便番号枠に input が2つある場合は、1つ目を role="postalCode1"、2つ目を role="postalCode2" にする。
+        - input が1つだけなら role="postalCode" とする。
+        - input が3つ以上ある場合はロール判定が難しいので "other" で構いません。
       
       ## 重要な制約（必ず守ること）
       - **入力フィールドが 1つ以上存在する場合は、"fields" 配列を空 [] のまま返してはいけません。**
