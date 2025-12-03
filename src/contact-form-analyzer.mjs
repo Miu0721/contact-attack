@@ -218,6 +218,8 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "position"
         - "referral"
         - "gender"
+        - "postalCode1"
+        - "postalCode2"        
         - "postalCode"
         - "prefecture"
         - "address"

@@ -85,6 +85,9 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
 }
 
 function valueForRole(role, senderInfo, message) {
+  const postalCode1 = senderInfo.postalCode1 || '';
+  const postalCode2 = senderInfo.postalCode2 || '';
+  const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
 
   // 氏名まわり
   if (role === 'name') {
@@ -173,7 +176,7 @@ function valueForRole(role, senderInfo, message) {
     return postalCode2 || '';
   }
   if (role === 'postalCode' || role === 'postal_code') {
-    return postalCode || '';
+    return combinedPostalCode || '';
   }
   if (role === 'prefecture') {
     return senderInfo.prefecture || '';

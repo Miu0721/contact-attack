@@ -192,6 +192,8 @@ export async function loadSenderFromSheet() {
     department: map.department,
     phone: map.phone,
     companyType: map.companyType,
+    postalCode1: map.postalCode1,
+    postalCode2: map.postalCode2,
   };
 
   const message = map.message;
