@@ -313,7 +313,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       - "required" は、そのフィールドが必須なら true、そうでなければ false にしてください（判定できない場合も false）。
       - "label" には、そのフィールドを人間が見て認識するラベルを 1 つ入れてください：
         - 優先順位: <label> のテキスト > 近傍の説明テキスト > placeholder > name/id からの推測
-      - "role" は 1つの文字列で指定してください。もし 1つのフィールドに複数の役割候補が適切な場合は、"roles" に配列で併記して構いません（例: ["department","position"]）。"role" は最も優先したい 1 つを入れてください。
+      - "role" は 1つの文字列で指定してください。placeholder や label などに複数の項目（例: 「部署・役職」）が明示されている場合のみ、"roles" に配列で複数の役割候補を併記して構いません（例: ["department","position"]）。"role" には最も優先したい 1 つだけを入れてください。
       - radio/checkbox/select で role が inquiryType の場合は、
         "preferredOption" に **選択肢の表示テキスト** を 1 つ入れてください（わからなければ ""）。
       
