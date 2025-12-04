@@ -257,6 +257,10 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 郵便番号の前半・後半（2入力の場合） → "postalCode1" / "postalCode2"
         - 電話番号の前半・中半・後半（3入力の場合） → "phone1" / "phone2" / "phone3"
         - 都道府県のみを入力させる項目 → "prefecture"
+        - 市区町村のみ → "city"
+        - 町域のみ → "town"
+        - 番地・丁目など → "street"
+        - 建物名・部屋番号 → "building"
         - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
         - 年齢・ご年齢・年代 → "age"
         - 「お問い合わせ種別」「お問い合わせの種類」など種別選択 → "inquiryType"
@@ -294,6 +298,9 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 同じ郵便番号枠に input が2つある場合は、1つ目を role="postalCode1"、2つ目を role="postalCode2" にする。
         - input が1つだけなら role="postalCode" とする。
         - input が3つ以上ある場合はロール判定が難しいので "other" で構いません。
+      - 住所フィールドの判定ルール：
+        - 都道府県・市区町村・町域・番地・建物などが分割されている場合、それぞれ "prefecture" / "city" / "town" / "street" / "building" を付けてください。
+        - 住所が1つの入力でまとめられている場合は "address" を使ってください。
       
       ## 重要な制約（必ず守ること）
       - **入力フィールドが 1つ以上存在する場合は、"fields" 配列を空 [] のまま返してはいけません。**
