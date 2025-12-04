@@ -234,19 +234,43 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const headers = await getContactRoleHeaders();
   if (!headers.length) {
     console.warn(
-      'updateContactFormFieldLog: Contacts シートの L1:AH1 にヘッダーがありません'
+      'updateContactFormFieldLog: Contacts シートの L1 以降にヘッダーがありません'
     );
     return;
   }
 
   // role → value のマップを作成
+  // filledSummary の 1 件に roles が複数あれば、その value を該当する role すべてに入れる
   const valueByRole = {};
+
   for (const item of filledSummary || []) {
-    if (!item || !item.role) continue;
-    const role = String(item.role).trim();
-    if (valueByRole[role] == null && item.value != null) {
-      const val = String(item.value);
-      valueByRole[role] = item.required ? `required${val}` : val;
+    if (!item) continue;
+
+    // item.roles があればそれを優先、なければ item.role 単体
+    const roles = Array.isArray(item.roles) && item.roles.length
+      ? item.roles
+      : item.role
+      ? [item.role]
+      : [];
+
+    if (!roles.length) continue;
+
+    // スプレッドシートに書き込む値（required フラグ付き）
+    if (item.value == null) continue;
+    let val = String(item.value);
+    if (item.required) {
+      val = `required${val}`;
+    }
+
+    // 当てはまる role すべてに同じ値を書き込む
+    for (const r of roles) {
+      const roleName = String(r).trim();
+      if (!roleName) continue;
+
+      // すでに値が入っている role は上書きしない（最初に埋めたものを優先）
+      if (valueByRole[roleName] == null) {
+        valueByRole[roleName] = val;
+      }
     }
   }
 
@@ -260,7 +284,6 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `Contacts!L${rowIndex}`,
-    // ヘッダー数ぶんを書き込むので右端まで自動で広がる
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [rowValues],
