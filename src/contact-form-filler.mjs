@@ -566,7 +566,14 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   // reCAPTCHA / 画像認証検出は無効化
 
   for (const f of formSchema.fields) {
-    const role = f.role;
+    const roles = Array.isArray(f.roles)
+      ? (f.roles || []).filter(Boolean).map((r) => String(r))
+      : Array.isArray(f.role)
+      ? (f.role || []).filter(Boolean).map((r) => String(r))
+      : f.role
+      ? [String(f.role)]
+      : [];
+    const role = roles[0] || '';
     const nameAttr = f.nameAttr || '';
     const idAttr = f.idAttr || '';
     const type = (f.type || 'text').toLowerCase();
@@ -580,6 +587,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       f.preferredOption || f.preferredOptionLabel || f.choiceToSelect || '';
     const meta = {
       role,
+      roles,
       type,
       label,
       nameAttr,
