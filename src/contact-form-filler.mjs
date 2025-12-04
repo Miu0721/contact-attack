@@ -4,16 +4,6 @@
 const CATEGORY_LABEL = '案件のご依頼';
 
 
-const IMAGE_CAPTCHA_KEYWORDS = [
-  'captcha',
-  '認証コード',
-  '確認コード',
-  'セキュリティコード',
-  '画像認証',
-  '画像の文字',
-  '画像に表示',
-];
-
 function selectorsForField(type, nameAttr, idAttr) {
   const selectors = [];
 
@@ -573,6 +563,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       : f.role
       ? [String(f.role)]
       : [];
+
     const role = roles[0] || '';
     const nameAttr = f.nameAttr || '';
     const idAttr = f.idAttr || '';
@@ -585,6 +576,47 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
     const selectors = selectorsForField(type, nameAttr, idAttr);
     const preferredOption =
       f.preferredOption || f.preferredOptionLabel || f.choiceToSelect || '';
+
+    // ---- ここから「複数 role 対応」 ----
+
+    // まずメイン role の値
+    let primaryValue = valueForRole(role, senderInfo, message);
+    if (primaryValue != null && typeof primaryValue !== 'string') {
+      primaryValue = String(primaryValue);
+    }
+
+    // すべての roles についての値一覧（ログ用 & 結合用）
+    const multiValue = [];
+    for (const r of roles) {
+      const raw = valueForRole(r, senderInfo, message);
+      if (raw == null || raw === '') continue;
+      multiValue.push({
+        role: r,
+        value: String(raw),
+      });
+    }
+
+    // 実際にフィールドへ入れる value を決定
+    let value = preferredOption || primaryValue || '';
+
+    // text / textarea の場合、roles が複数あれば「まとめて 1 つの文字列」に結合
+    if (!preferredOption && multiValue.length > 1 && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
+      value = multiValue.map((m) => m.value).join(' ・ ');
+    }
+
+    // それでも value が空なら、text/textarea 系はラベルからフォールバック
+    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
+      value = valueFromLabelFallback(label, senderInfo, message);
+    }
+
+    // まだ value が無くて text 系なら、このフィールドは諦める
+    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') continue;
+
+    // 念のため string に統一
+    if (value != null && typeof value !== 'string') {
+      value = String(value);
+    }
+
     const meta = {
       role,
       roles,
@@ -594,26 +626,24 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       idAttr,
       order: orderCounter++,
       desiredLabel: preferredOption,
+      multiValue: multiValue.length ? multiValue : undefined, // ★ ここに複数値を残す
     };
+
+    // ---- ここまで「複数 role 対応」 ----
 
     if (type === 'checkbox') {
       await fillCheckbox(page, selectors, meta, filledSummary);
       continue;
     }
 
-    let value = preferredOption || valueForRole(role, senderInfo, message);
-    if (!value && type !== 'select' && type !== 'radio') {
-      // role が other などで空だった場合、ラベルから推測する簡易フォールバック
-      value = valueFromLabelFallback(label, senderInfo, message);
-    }
-    if (!value && type !== 'select' && type !== 'radio') continue;
-
     if (type === 'radio') {
+      // radio は 1 個しか選べないので、結局 value は 1 つだけ使う
       await selectRadio(page, selectors, value, meta, filledSummary);
       continue;
     }
 
     if (type === 'select') {
+      // select も 1 個だけ
       await selectOption(page, selectors, value, meta, filledSummary);
       continue;
     }
@@ -642,6 +672,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       }
     }
   }
+
 
   return filledSummary;
 }
