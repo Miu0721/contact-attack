@@ -188,12 +188,6 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.address || '';
   }
 
-  // 問い合わせカテゴリ系
-  /**
-   * if (role === 'inquiryCategory' || role === 'category' || role === 'inquiry_category') {
-    return senderInfo.inquiryCategory || CATEGORY_LABEL;
-  }
-    **/ 
   if (role === 'inquiryType') {
     return senderInfo.inquiryType || CATEGORY_LABEL;
   }
