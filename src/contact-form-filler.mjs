@@ -93,6 +93,14 @@ function valueForRole(role, senderInfo, message) {
   const phone3 = senderInfo.phone3 || '';
   const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
   const combinedPhone = [phone1, phone2, phone3].filter(Boolean).join('-');
+  const combinedAddress = [
+    senderInfo.city || '',
+    senderInfo.town || '',
+    senderInfo.street || '',
+    senderInfo.building || '',
+  ]
+    .filter(Boolean)
+    .join('');
 
 
   // 氏名まわり
@@ -197,7 +205,7 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.prefecture || '';
   }
   if (role === 'address') {
-    return senderInfo.address || '';
+    return combinedAddress || senderInfo.address || '';
   }
 
   if (role === 'inquiryType') {
@@ -227,6 +235,15 @@ function valueFromLabelFallback(label, senderInfo, message) {
   const combinedPhone = [senderInfo.phone1 || '', senderInfo.phone2 || '', senderInfo.phone3 || '']
     .filter(Boolean)
     .join('-');
+  const combinedAddress = [
+    senderInfo.prefecture || '',
+    senderInfo.city || '',
+    senderInfo.town || '',
+    senderInfo.street || '',
+    senderInfo.building || '',
+  ]
+    .filter(Boolean)
+    .join('');
 
   if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
   if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
@@ -240,7 +257,7 @@ function valueFromLabelFallback(label, senderInfo, message) {
   if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
   if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
   if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
-    return combinedPostalCode || senderInfo.address || '';
+    return combinedPostalCode || combinedAddress || senderInfo.address || '';
   }
   if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
     return senderInfo.subject || '';

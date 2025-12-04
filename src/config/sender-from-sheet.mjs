@@ -193,7 +193,12 @@ export async function loadSenderFromSheet() {
     phone1: map.phone1,
     phone2: map.phone2,
     phone3: map.phone3,
-  };
+    prefecture: map.prefecture,
+    city: map.city,
+    town: map.town,
+    street: map.street,
+    building: map.building,
+};
 
   const message = map.message;
   const companyTopUrl = map.companyTopUrl;
