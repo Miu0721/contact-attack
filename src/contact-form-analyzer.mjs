@@ -224,7 +224,6 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "prefecture"
         - "address"
         - "age"
-        // - "inquiryCategory"
         - "subject"
         - "inquiryType"
         - "message"
