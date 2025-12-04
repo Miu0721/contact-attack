@@ -74,13 +74,25 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
   }
 }
 
+// filledSummary に複数ロールを展開して記録する共通ヘルパ
+function pushFilledSummary(filledSummary, meta, payload = {}) {
+  const base = { ...meta, ...payload };
+  const roles = Array.isArray(meta.roles) ? meta.roles.filter(Boolean) : [];
+  if (roles.length > 1) {
+    roles.forEach((r) => filledSummary.push({ ...base, role: r }));
+  } else {
+    filledSummary.push(base);
+  }
+}
+
 function valueForRole(role, senderInfo, message) {
   const postalCode1 = senderInfo.postalCode1 || '';
   const postalCode2 = senderInfo.postalCode2 || '';
   const phone1 = senderInfo.phone1 || '';
   const phone2 = senderInfo.phone2 || '';
   const phone3 = senderInfo.phone3 || '';
-  // const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
+  const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
+  const combinedPhone = [phone1, phone2, phone3].filter(Boolean).join('-');
 
 
   // 氏名まわり
@@ -115,7 +127,7 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.email || '';
   }
   if (role === 'phone') {
-    return senderInfo.phone || '';
+    return combinedPhone || senderInfo.phone || '';
   }
   if (role === 'personalPhone' || role === 'personal_phone') {
     return senderInfo.personalPhone || combinedPhone || senderInfo.phone || '';
@@ -209,10 +221,16 @@ function valueForRole(role, senderInfo, message) {
 function valueFromLabelFallback(label, senderInfo, message) {
   const text = (label || '').toLowerCase();
   if (!text) return '';
+  const combinedPostalCode = [senderInfo.postalCode1 || '', senderInfo.postalCode2 || '']
+    .filter(Boolean)
+    .join('-');
+  const combinedPhone = [senderInfo.phone1 || '', senderInfo.phone2 || '', senderInfo.phone3 || '']
+    .filter(Boolean)
+    .join('-');
 
   if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
   if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
-  if (text.includes('電話') || text.includes('tel')) return senderInfo.phone || '';
+  if (text.includes('電話') || text.includes('tel')) return combinedPhone || senderInfo.phone || '';
   if ((text.includes('法人') && text.includes('個人')) || text.includes('法人／個人')) {
     return senderInfo.companyType || '';
   }
@@ -222,7 +240,7 @@ function valueFromLabelFallback(label, senderInfo, message) {
   if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
   if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
   if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
-    return senderInfo.address || '';
+    return combinedPostalCode || senderInfo.address || '';
   }
   if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
     return senderInfo.subject || '';
@@ -314,7 +332,7 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
         console.log(
           `☑️ Checked checkbox for role="${meta.role}" via ${sel} (choice="${choiceLabel}") (frame: ${frame.url()})`
         );
-        filledSummary.push({ ...meta, selector: sel, value: choiceLabel });
+        pushFilledSummary(filledSummary, meta, { selector: sel, value: choiceLabel });
         return true;
       } catch (_e) {
         // try next selector/frame
@@ -390,8 +408,7 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
           console.log(
             `🔘 Checked radio(index=${choice.index}) for role="${meta.role}" via ${sel} (choice="${choiceLabel}") (frame: ${frame.url()})`
           );
-          filledSummary.push({
-            ...meta,
+          pushFilledSummary(filledSummary, meta, {
             selector: sel,
             value: choiceLabel,
           });
@@ -450,8 +467,7 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
           );
 
           // filledSummary には「人間が見るラベル」を優先して残す
-          filledSummary.push({
-            ...meta,
+          pushFilledSummary(filledSummary, meta, {
             selector: sel,
             value: matched.label,      // 表示テキスト
             optionValue: matched.value // HTML の value 属性（おまけ）
@@ -488,8 +504,7 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
             `🔽 Fallback select "${fallback.label}" (value="${fallback.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
           );
 
-          filledSummary.push({
-            ...meta,
+          pushFilledSummary(filledSummary, meta, {
             selector: sel,
             value: fallback.label,
             optionValue: fallback.value,
@@ -519,7 +534,7 @@ async function fillTextField(page, selectors, value, meta, filledSummary) {
 
         await frame.fill(sel, value);
         console.log(`✏️ Filled role="${meta.role}" into ${sel} (frame: ${frame.url()})`);
-        filledSummary.push({ ...meta, selector: sel, value });
+        pushFilledSummary(filledSummary, meta, { selector: sel, value });
         return true;
       } catch (_e) {
         // try next
@@ -603,8 +618,24 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       value = valueFromLabelFallback(label, senderInfo, message);
     }
 
-    // まだ value が無くて text 系なら、このフィールドは諦める
-    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') continue;
+    // まだ value が無くて text 系なら、このフィールドは諦める（other はサマリに残す）
+    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
+      if (role === 'other') {
+        const meta = {
+          role,
+          roles,
+          type,
+          label,
+          nameAttr,
+          idAttr,
+          order: orderCounter++,
+          desiredLabel: preferredOption,
+          multiValue: multiValue.length ? multiValue : undefined,
+        };
+        pushFilledSummary(filledSummary, meta, { selector: '', value: '' });
+      }
+      continue;
+    }
 
     // 念のため string に統一
     if (value != null && typeof value !== 'string') {
@@ -658,7 +689,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
           console.log(
             `✏️ Fallback filled role="${meta.role}" into first free input ${selector} (frame: ${frame.url()})`
           );
-          filledSummary.push({ ...meta, selector, value });
+          pushFilledSummary(filledSummary, meta, { selector, value });
           break;
         } catch (_e) {
           // try next frame
