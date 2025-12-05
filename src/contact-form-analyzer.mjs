@@ -55,6 +55,12 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
   }
 
   if (fieldsHtml && fieldsHtml.trim()) {
+    // autocomplete="off" が明示されている場合は処理を中断
+    if (/autocomplete\\s*=\\s*["']?off["']?/i.test(fieldsHtml)) {
+      console.warn('⚠️ autocomplete="off" が見つかったため、このURLの処理をスキップします');
+      return null;
+    }
+
     const count = (fieldsHtml.match(/<input|<textarea|<select/gi) || []).length;
     console.log('🧩 フィールド要素を検出:', count, '個');
 
