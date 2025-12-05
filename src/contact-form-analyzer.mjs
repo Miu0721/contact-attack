@@ -72,6 +72,10 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
     return await callFormAnalyzerModel(formHtml, senderInfo, message, count);
   }
 
+  // 入力フィールドが無い → ここで中断し次へ（iframe 探索せずスキップ）
+  console.warn('⚠️ このページには form/input/textarea/select が見つかりませんでした。スキップします。');
+  return null;
+
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
   const iframes = await ctx.$$('iframe');
   if (!iframes.length) {
