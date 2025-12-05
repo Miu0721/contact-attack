@@ -102,6 +102,13 @@ function valueForRole(role, senderInfo, message) {
     .filter(Boolean)
     .join('');
 
+  const combinedStreetAddress = [
+    senderInfo.town || '',
+    senderInfo.street || '',
+  ]
+    .filter(Boolean)
+    .join('');
+
 
   // 氏名まわり
   if (role === 'name') {
@@ -139,6 +146,21 @@ function valueForRole(role, senderInfo, message) {
   }
   if (role === 'personalPhone' || role === 'personal_phone') {
     return senderInfo.personalPhone || combinedPhone || senderInfo.phone || '';
+  }
+  if (role === 'city') {
+    return senderInfo.city || '';
+  }
+  if (role === 'town') {
+    return senderInfo.town || '';
+  }
+  if (role === 'street') {
+    return senderInfo.street || '';
+  }
+  if (role === 'streetAddress') {
+    return combinedStreetAddress || '';
+  }
+  if (role === 'building') {
+    return senderInfo.building || '';
   }
 
   // 会社情報系

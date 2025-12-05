@@ -224,6 +224,11 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "prefecture"
         - "address"
         - "age"
+        - "city"
+        - "town"
+        - "street"
+        - "building"
+        - "streetAddress"
         - "subject"
         - "inquiryType"
         - "message"
@@ -258,8 +263,9 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 電話番号の前半・中半・後半（3入力の場合） → "phone1" / "phone2" / "phone3"
         - 都道府県のみを入力させる項目 → "prefecture"
         - 市区町村のみ → "city"
-        - 町域のみ → "town"
+        - 町名 → "town"
         - 番地・丁目など → "street"
+        - 番地・丁目など(町名番地）をまとめて入力 → "streetAddress"
         - 建物名・部屋番号 → "building"
         - 住所（都道府県〜市区町村〜番地までまとめて入力） → "address"
         - 年齢・ご年齢・年代 → "age"
@@ -274,7 +280,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
       
       ## 含めるべきフィールド / 無視するフィールド
       ### 含める（出力対象）
-      - ユーザーが入力・選択するデータ項目：s
+      - ユーザーが入力・選択するデータ項目：
         - <input type="text|email|tel|number|password|radio|checkbox">
         - <textarea>
         - <select>
