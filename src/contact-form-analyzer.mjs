@@ -237,6 +237,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "phone1"
         - "phone2"
         - "phone3"
+        - "country"
         - どれにも当てはまらない場合だけ "other"
 
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
@@ -274,7 +275,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 「お問い合わせ種別」「お問い合わせの種類」など種別選択 → "inquiryType"
         - 件名・タイトル → "subject"
         - お問い合わせ内容・ご質問内容・ご相談内容 → "message"
-
+        - 国 → "country"
       - どれにもはっきり当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
       
       ### その他

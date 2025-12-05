@@ -237,6 +237,9 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.inquiryType || CATEGORY_LABEL;
   }
 
+  if (role === 'country') {
+    return senderInfo.country || '';
+  }
   // 件名・本文
   if (role === 'subject') {
     return senderInfo.subject || '';
