@@ -26,7 +26,7 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 
   // 何かしら出てくるのを一旦待つ
   await ctx
-    .waitForSelector('form, input, textarea, select, iframe', {
+    .waitForSelector('form, main input, main textarea, main select, body > input, body > textarea, body > select, iframe', {
       timeout: 30000,
     })
     .catch(() => {});
@@ -38,18 +38,30 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 
   if (forms && forms.length > 0) {
     console.log('🧩 form タグを検出: count =', forms.length);
-    fieldsHtml = await ctx.$eval('form', (form) => form.outerHTML);
+    fieldsHtml = await ctx.$eval('form', (form) => {
+      // headerやnav内のフォームは除外
+      const withinHeader = form.closest('header, nav');
+      if (withinHeader) return '';
+      return form.outerHTML;
+    });
   } else {
     console.warn(
       'form タグが見つからなかったので、input/textarea/select のみを対象にします',
     );
     fieldsHtml = await ctx.$$eval(
-      'input, textarea, select',
+      'main input, main textarea, main select, body > input, body > textarea, body > select',
       (elems) => elems.map((e) => e.outerHTML).join('\n'),
     );
   }
 
   if (fieldsHtml && fieldsHtml.trim()) {
+    // autocomplete="off" が明示されている場合は処理を中断
+    if (/autocomplete\s*=\s*["']?off["']?/i.test(fieldsHtml)) {
+      console.warn(
+        '⚠️ autocomplete="off" が見つかったため、このURLの処理をスキップします');
+      return null;
+    }
+
     const count = (fieldsHtml.match(/<input|<textarea|<select/gi) || []).length;
     console.log('🧩 フィールド要素を検出:', count, '個');
 
@@ -60,6 +72,10 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
     // ← ★ ここでフィールド数ヒントも一緒に渡す
     return await callFormAnalyzerModel(formHtml, senderInfo, message, count);
   }
+
+  // 入力フィールドが無い → ここで中断し次へ（iframe 探索せずスキップ）
+  console.warn('⚠️ このページには form/input/textarea/select が見つかりませんでした。スキップします。');
+  return null;
 
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
   const iframes = await ctx.$$('iframe');

@@ -13,6 +13,12 @@ import {
   updateContactRowValues,
 } from './lib/google/contactsRepo.mjs';
 
+const appendManualNote = (msg) => {
+  const note = '手動対応必須';
+  if (!msg) return note;
+  return msg.includes(note) ? msg : `${msg} ${note}`;
+};
+
 // import { notifySlack } from './lib/slack.mjs';
 
 async function appendFormLogSafe(params) {
@@ -130,7 +136,8 @@ export async function runFromSheetJob() {
           formSchema = await analyzeContactFormWithAI(page, senderInfo, message);
           if (!formSchema) {
             lastResult = 'form_schema_error';
-            lastErrorMsg = 'フォーム構造を解析できませんでした';
+            lastErrorMsg =
+              '解析失敗';
             continue;
           }
 
@@ -140,7 +147,7 @@ export async function runFromSheetJob() {
 
           if (filledSummary.length === 0) {
             lastResult = 'fill_empty';
-            lastErrorMsg = '入力できるフィールドがありませんでした';
+            lastErrorMsg = '入力できるフィールドがありませんでした（手動対応必須）';
             continue;
           }
 
@@ -164,16 +171,20 @@ export async function runFromSheetJob() {
         }
       } catch (err) {
         console.error('💥 Error while processing contact:', err);
-        lastResult = 'exception';
-        lastErrorMsg = String(err);
-        status = 'Failed';
-      }
+      lastResult = 'exception';
+      lastErrorMsg = String(err);
+      status = 'Failed';
+    }
 
-      await updateContactRowValues(contact, {
-        contactUrl,
-        status,
-        lastRunAt: timestamp,
-        lastResult,
+    if (status !== 'Success') {
+      lastErrorMsg = appendManualNote(lastErrorMsg || lastResult || '');
+    }
+
+    await updateContactRowValues(contact, {
+      contactUrl,
+      status,
+      lastRunAt: timestamp,
+      lastResult,
         lastErrorMsg,
         runCount,
       });
