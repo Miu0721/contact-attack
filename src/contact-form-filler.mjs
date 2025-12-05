@@ -141,6 +141,9 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'email') {
     return senderInfo.email || '';
   }
+  if (role === 'confirmEmail') {
+    return senderInfo.confirmEmail || '';
+  }
   if (role === 'phone') {
     return combinedPhone || senderInfo.phone || '';
   }
