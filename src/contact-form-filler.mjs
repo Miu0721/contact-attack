@@ -170,6 +170,9 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'department') {
     return senderInfo.department || '';
   }
+  if (role === 'industry') {
+    return senderInfo.industry || '';
+  }
   if (role === 'companyType' || role === 'company_type') {
     return senderInfo.companyType || '';
   }
