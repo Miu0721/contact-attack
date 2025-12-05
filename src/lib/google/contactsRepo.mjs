@@ -63,7 +63,8 @@ async function getContactsSheetId() {
 export async function fetchContacts() {
   const sheets = await getSheets();
 
-  const range = `${CONTACTS_SHEET_NAME}!A2:I`; // 1行目はヘッダ想定
+  // A:I 既存列 + 新規の住所分割列（J〜N）も読み取る
+  const range = `${CONTACTS_SHEET_NAME}!A2:N`; // 1行目はヘッダ想定
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range,
