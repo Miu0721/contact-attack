@@ -26,7 +26,7 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 
   // 何かしら出てくるのを一旦待つ
   await ctx
-    .waitForSelector('form, input, textarea, select, iframe', {
+    .waitForSelector('form, main input, main textarea, main select, body > input, body > textarea, body > select, iframe', {
       timeout: 30000,
     })
     .catch(() => {});
@@ -38,13 +38,18 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 
   if (forms && forms.length > 0) {
     console.log('🧩 form タグを検出: count =', forms.length);
-    fieldsHtml = await ctx.$eval('form', (form) => form.outerHTML);
+    fieldsHtml = await ctx.$eval('form', (form) => {
+      // headerやnav内のフォームは除外
+      const withinHeader = form.closest('header, nav');
+      if (withinHeader) return '';
+      return form.outerHTML;
+    });
   } else {
     console.warn(
       'form タグが見つからなかったので、input/textarea/select のみを対象にします',
     );
     fieldsHtml = await ctx.$$eval(
-      'input, textarea, select',
+      'main input, main textarea, main select, body > input, body > textarea, body > select',
       (elems) => elems.map((e) => e.outerHTML).join('\n'),
     );
   }
