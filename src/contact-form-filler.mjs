@@ -47,6 +47,25 @@ function allFrames(page) {
   return page.frames();
 }
 
+// フォーム内リンクのクリックを無効化して誤遷移を防ぐ
+async function disableFormLinks(page) {
+  for (const frame of allFrames(page)) {
+    try {
+      await frame.evaluate(() => {
+        document.querySelectorAll('form a').forEach((a) => {
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          });
+          a.setAttribute('data-disabled-link', 'true');
+        });
+      });
+    } catch (_e) {
+      // ignore per-frame failure
+    }
+  }
+}
+
 function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'textarea']) {
   try {
     return frame.evaluateHandle(
@@ -611,6 +630,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
   let orderCounter = 1;
 
   // reCAPTCHA / 画像認証検出は無効化
+  await disableFormLinks(page);
 
   for (const f of formSchema.fields) {
     const roles = Array.isArray(f.roles)
