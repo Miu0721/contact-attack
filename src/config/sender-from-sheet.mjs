@@ -378,7 +378,8 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
         item.nameAttr ||
         item.idAttr ||
         `field${idx + 1}`;
-      otherLabels.push(label);
+      const display = item.required ? `required${label}` : label;
+      otherLabels.push(display);
     }
   });
 

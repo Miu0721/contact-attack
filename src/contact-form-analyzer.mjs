@@ -1,3 +1,4 @@
+
 // src/contact-form-analyzer.mjs
 import { openai } from './lib/openai.mjs';
 import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
@@ -56,9 +57,8 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
 
   if (fieldsHtml && fieldsHtml.trim()) {
     // autocomplete="off" が明示されている場合は処理を中断
-    if (/autocomplete\s*=\s*["']?off["']?/i.test(fieldsHtml)) {
-      console.warn(
-        '⚠️ autocomplete="off" が見つかったため、このURLの処理をスキップします');
+    if (/autocomplete\\s*=\\s*["']?off["']?/i.test(fieldsHtml)) {
+      console.warn('⚠️ autocomplete="off" が見つかったため、このURLの処理をスキップします');
       return null;
     }
 
@@ -72,10 +72,6 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
     // ← ★ ここでフィールド数ヒントも一緒に渡す
     return await callFormAnalyzerModel(formHtml, senderInfo, message, count);
   }
-
-  // 入力フィールドが無い → ここで中断し次へ（iframe 探索せずスキップ）
-  console.warn('⚠️ このページには form/input/textarea/select が見つかりませんでした。スキップします。');
-  return null;
 
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
   const iframes = await ctx.$$('iframe');
