@@ -36,16 +36,31 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
   const forms = await ctx.$$('form');
 
   let fieldsHtml = '';
-
+  
   if (forms && forms.length > 0) {
     console.log('🧩 form タグを検出: count =', forms.length);
-    fieldsHtml = await ctx.$eval('form', (form) => {
-      // headerやnav内のフォームは除外
-      const withinHeader = form.closest('header, nav');
-      if (withinHeader) return '';
-      return form.outerHTML;
-    });
-  } else {
+  
+    for (const formHandle of forms) {
+      const html = await formHandle.evaluate((form) => {
+        const withinHeader = form.closest('header, nav');
+        if (withinHeader) return '';
+        return form.outerHTML;
+      });
+  
+      if (html && html.trim()) {
+        fieldsHtml = html;
+        break; // 最初に見つかった「header/nav 以外の form」を採用
+      }
+    }
+  
+    if (!fieldsHtml) {
+      console.warn(
+        'ヘッダーやナビ内の form しか見つからなかったため、input/textarea/select のみを対象にします',
+      );
+    }
+  }
+  
+  if (!fieldsHtml) {
     console.warn(
       'form タグが見つからなかったので、input/textarea/select のみを対象にします',
     );
@@ -54,6 +69,7 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
       (elems) => elems.map((e) => e.outerHTML).join('\n'),
     );
   }
+  
 
   if (fieldsHtml && fieldsHtml.trim()) {
 
