@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { analyzeContactFormWithAI } from './contact-form-analyzer.mjs';
-import { fillContactForm /*, confirmAndSubmit */ } from './contact-form-filler.mjs';
+import { fillContactForm } from './contact-form-filler.mjs';
 import { findContactPageCandidates } from './url-discovery.mjs';
 
 import {
@@ -159,6 +159,8 @@ export async function runFromSheetJob() {
             formSchema,
           });
 
+          // success = true;
+          // lastResult = submitted ? 'submitted' : 'filled';
           success = true;
           lastResult = 'filled';
           status = 'Success';
