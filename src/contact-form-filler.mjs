@@ -266,6 +266,18 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'message') {
     return message || senderInfo.message || '';
   }
+  if (role === 'companyNameKana') {
+    return senderInfo.companyNameKana || '';
+  }
+  if (role === 'nameHira') {
+    return senderInfo.nameHira || '';
+  }
+  if (role === 'firstNameHira') {
+    return senderInfo.firstNameHira || '';
+  }
+  if (role === 'lastNameHira') {
+    return senderInfo.lastNameHira || '';
+  }
 
   // "other" や未知の role は空文字
   return '';

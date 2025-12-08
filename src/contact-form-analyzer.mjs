@@ -262,6 +262,10 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "phone2"
         - "phone3"
         - "country"
+        - "companyNameKana"
+        - "nameHira"
+        - "firstNameHira"
+        - "lastNameHira"
         - どれにも当てはまらない場合だけ "other"
 
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
@@ -274,6 +278,9 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - お名前（フリガナ）全体 → "nameKana"
         - 姓（フリガナ） → "lastNameKana"
         - 名（フリガナ） → "firstNameKana"
+        - お名前（ふりがな）全体 → "nameHira"
+        - 名（ふりがな） → "firstNameHira"
+        - 姓（ふりがな） → "lastNameHira"
         - メールアドレス → "email"
         - メールアドレス確認 → "confirmEmail"
         - 会社名・法人名・組織名 → "company-name"
@@ -301,6 +308,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 件名・タイトル → "subject"
         - お問い合わせ内容・ご質問内容・ご相談内容 → "message"
         - 国 → "country"
+        - 会社名（カナ） → "companyNameKana"
       - どれにもはっきり当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
       
       ### その他
