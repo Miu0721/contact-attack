@@ -201,12 +201,9 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'position') {
     return senderInfo.position || '';
   }
-  if (role === 'companyTopUrl') {
+  if (role === 'corporateSiteUrl') {
     return (
-      senderInfo.companyTopUrl ||
-      senderInfo.companyUrl ||
-      senderInfo.companyTopURL ||
-      ''
+      senderInfo.corporateSiteUrl ||''
     );
   }
   // 旧 role 互換

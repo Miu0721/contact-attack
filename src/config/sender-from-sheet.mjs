@@ -199,6 +199,7 @@ export async function loadSenderFromSheet() {
     town: map.town,
     street: map.street,
     building: map.building,
+    corporateSiteUrl: map.corporateSiteUrl,
 };
 
   const message = map.message;
