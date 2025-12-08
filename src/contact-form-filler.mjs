@@ -665,28 +665,28 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
 
     // ---- ここから「複数 role 対応」 ----
 
-    // まずメイン role の値
-    let primaryValue = valueForRole(role, senderInfo, message);
-    if (primaryValue != null && typeof primaryValue !== 'string') {
-      primaryValue = String(primaryValue);
-    }
-
     // すべての roles についての値一覧（ログ用 & 結合用）
     const multiValue = [];
     for (const r of roles) {
       const raw = valueForRole(r, senderInfo, message);
       if (raw == null || raw === '') continue;
-      multiValue.push({
-        role: r,
-        value: String(raw),
-      });
+      multiValue.push({ role: r, value: String(raw) });
     }
 
     // 実際にフィールドへ入れる value を決定
-    let value = preferredOption || primaryValue || '';
+    let value = preferredOption || '';
+    if (!value && multiValue.length) {
+      value = multiValue[0].value; // 最初のロールの値
+    }
 
-    // text / textarea の場合、roles が複数あれば「まとめて 1 つの文字列」に結合
-    if (!preferredOption && multiValue.length > 1 && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
+    // text / textarea の場合、roles が複数あれば連結文字列に
+    if (
+      !preferredOption &&
+      multiValue.length > 1 &&
+      type !== 'select' &&
+      type !== 'radio' &&
+      type !== 'checkbox'
+    ) {
       value = multiValue.map((m) => m.value).join(' ・ ');
     }
 
