@@ -199,6 +199,7 @@ export async function loadSenderFromSheet() {
     town: map.town,
     street: map.street,
     building: map.building,
+    corporateSiteUrl: map.corporateSiteUrl,
 };
 
   const message = map.message;
@@ -378,7 +379,8 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
         item.nameAttr ||
         item.idAttr ||
         `field${idx + 1}`;
-      otherLabels.push(label);
+      const display = item.required ? `required${label}` : label;
+      otherLabels.push(display);
     }
   });
 
@@ -435,17 +437,19 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     });
 
     // Contacts の K列 & L列以降にも値を反映
+    // Contacts の K列 & L列以降にも値を反映
     if (contact && contact.rowIndex) {
       const rowIndex = contact.rowIndex;
 
-      // ★ 追加: Contacts の K列に "other" のラベル一覧を出力（改行区切り）
+      // ★ 修正: 既存の K列の値を取得してマージする
       if (otherLabels.length > 0) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
           range: `Contacts!K${rowIndex}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: {
-            values: [[otherLabels.join('\n')]], // カンマ区切りにしたければ ', ' に変える
+            // 例: 「ラベル1＆ラベル2＆ラベル3」
+            values: [[otherLabels.join(' / ')]],
           },
         });
       }

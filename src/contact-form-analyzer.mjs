@@ -1,3 +1,4 @@
+
 // src/contact-form-analyzer.mjs
 import { openai } from './lib/openai.mjs';
 import { extractTextFromResponse, parseJsonFromText } from './lib/ai-response.mjs';
@@ -35,16 +36,31 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
   const forms = await ctx.$$('form');
 
   let fieldsHtml = '';
-
+  
   if (forms && forms.length > 0) {
     console.log('🧩 form タグを検出: count =', forms.length);
-    fieldsHtml = await ctx.$eval('form', (form) => {
-      // headerやnav内のフォームは除外
-      const withinHeader = form.closest('header, nav');
-      if (withinHeader) return '';
-      return form.outerHTML;
-    });
-  } else {
+  
+    for (const formHandle of forms) {
+      const html = await formHandle.evaluate((form) => {
+        const withinHeader = form.closest('header, nav');
+        if (withinHeader) return '';
+        return form.outerHTML;
+      });
+  
+      if (html && html.trim()) {
+        fieldsHtml = html;
+        break; // 最初に見つかった「header/nav 以外の form」を採用
+      }
+    }
+  
+    if (!fieldsHtml) {
+      console.warn(
+        'ヘッダーやナビ内の form しか見つからなかったため、input/textarea/select のみを対象にします',
+      );
+    }
+  }
+  
+  if (!fieldsHtml) {
     console.warn(
       'form タグが見つからなかったので、input/textarea/select のみを対象にします',
     );
@@ -53,14 +69,9 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
       (elems) => elems.map((e) => e.outerHTML).join('\n'),
     );
   }
+  
 
   if (fieldsHtml && fieldsHtml.trim()) {
-    // autocomplete="off" が明示されている場合は処理を中断
-    if (/autocomplete\s*=\s*["']?off["']?/i.test(fieldsHtml)) {
-      console.warn(
-        '⚠️ autocomplete="off" が見つかったため、このURLの処理をスキップします');
-      return null;
-    }
 
     const count = (fieldsHtml.match(/<input|<textarea|<select/gi) || []).length;
     console.log('🧩 フィールド要素を検出:', count, '個');
@@ -72,10 +83,6 @@ async function analyzeInContext(ctx, isRoot = false, senderInfo = {}, message = 
     // ← ★ ここでフィールド数ヒントも一緒に渡す
     return await callFormAnalyzerModel(formHtml, senderInfo, message, count);
   }
-
-  // 入力フィールドが無い → ここで中断し次へ（iframe 探索せずスキップ）
-  console.warn('⚠️ このページには form/input/textarea/select が見つかりませんでした。スキップします。');
-  return null;
 
   // 2. このコンテキストに入力フィールドが無い → iframeを探索
   const iframes = await ctx.$$('iframe');
@@ -230,7 +237,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "company-name"
         - "department"
         - "phone"
-        - "companyTopUrl"
+        - "corporateSiteUrl"
         - "personalPhone"
         - "position"
         - "referral"
@@ -274,7 +281,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - 業種 → "industry"
         - 法人 / 個人の種別 → "companyType"
         - 電話番号（会社代表・連絡先としか書いていない場合を含む） → "phone"
-        - 会社ホームページURL・コーポレートサイトURL → "companyTopUrl"
+        - 会社ホームページURL・コーポレートサイトURL → "corporateSiteUrl"
         - 担当者の個人携帯・個人電話番号と明記されている場合 → "personalPhone"
         - 役職（部長・課長・代表取締役 など） → "position"
         - 当社をどこで知りましたか・紹介元・流入経路 → "referral"
