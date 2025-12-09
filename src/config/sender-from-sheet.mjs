@@ -65,7 +65,7 @@ async function getSheets() {
 }
 
 /**
- * Contacts シートの L1:AH1 から role 名のヘッダーを取得
+ * Contacts シートの J1 以降から role 名のヘッダーを取得
  * 例: ['name', 'lastName', 'firstName', ...]
  */
 async function getContactRoleHeaders() {
@@ -75,8 +75,8 @@ async function getContactRoleHeaders() {
   const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // L列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
-    range: `Contacts!L1:BA1`,
+    // J列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
+    range: `Contacts!J1:BA1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -204,7 +204,7 @@ export async function loadSenderFromSheet() {
     nameHira: map.nameHira,
     firstNameHira: map.firstNameHira,
     lastNameHira: map.lastNameHira,
-};
+  };
 
   const message = map.message;
   const companyTopUrl = map.companyTopUrl;
@@ -219,7 +219,7 @@ export async function loadSenderFromSheet() {
 }
 
 /**
- * Contacts シートの L列以降に、
+ * Contacts シートの J列以降に、
  * role ごとの入力値を1行分書き込む
  *
  * @param {Object} contact - Contacts シート1行分のオブジェクト（rowIndex 必須）
@@ -242,7 +242,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const headers = await getContactRoleHeaders();
   if (!headers.length) {
     console.warn(
-      'updateContactFormFieldLog: Contacts シートの L1 以降にヘッダーがありません'
+      'updateContactFormFieldLog: Contacts シートの J1 以降にヘッダーがありません'
     );
     return;
   }
@@ -288,10 +288,10 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const sheets = await getSheets();
   const rowIndex = contact.rowIndex;
 
-  // Contacts!L{rowIndex} から右方向に rowValues を書き込む
+  // Contacts!J{rowIndex} から右方向に rowValues を書き込む
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `Contacts!L${rowIndex}`,
+    range: `Contacts!J${rowIndex}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [rowValues],
@@ -302,7 +302,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
 
 /**
  * フォームの質問項目と入力値を FormLogs シートに 1行 追記する
- * ついでに、Contacts シートの L列以降に role ごとの値も反映する。
+ * ついでに、Contacts シートの J列以降に role ごとの値も反映する。
  *
  * @param {Object} params
  * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
@@ -440,25 +440,24 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
       },
     });
 
-    // Contacts の K列 & L列以降にも値を反映
-    // Contacts の K列 & L列以降にも値を反映
+    // Contacts の K列 & J列以降にも値を反映
     if (contact && contact.rowIndex) {
       const rowIndex = contact.rowIndex;
 
-      // ★ 修正: 既存の K列の値を取得してマージする
+      // other ラベル一覧を K列に書き込む
       if (otherLabels.length > 0) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
           range: `Contacts!K${rowIndex}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: {
-            // 例: 「ラベル1＆ラベル2＆ラベル3」
+            // 例: 「ラベル1 / ラベル2 / ラベル3」
             values: [[otherLabels.join(' / ')]],
           },
         });
       }
 
-      // 既存処理: role ごとの値を L列以降へ
+      // 既存処理: role ごとの値を J列以降へ
       await updateContactFormFieldLog(contact, normalizedEntries);
     }
   } catch (err) {
