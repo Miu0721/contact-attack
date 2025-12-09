@@ -304,27 +304,27 @@ function valueFromLabelFallback(label, senderInfo, message) {
     .filter(Boolean)
     .join('');
 
-  if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
-  if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
-  if (text.includes('電話') || text.includes('tel')) return combinedPhone || senderInfo.phone || '';
-  if ((text.includes('法人') && text.includes('個人')) || text.includes('法人／個人')) {
-    return senderInfo.companyType || '';
-  }
-  if (text.includes('会社') || text.includes('法人') || text.includes('組織')) {
-    return senderInfo.company || senderInfo.organization || '';
-  }
-  if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
-  if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
-  if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
-    return combinedPostalCode || combinedAddress || senderInfo.address || '';
-  }
-  if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
-    return senderInfo.subject || '';
-  }
-  if (text.includes('内容') || text.includes('message') || text.includes('問い合わせ')) {
-    return message || '';
-  }
-  return '';
+  // if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
+  // if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
+  // if (text.includes('電話') || text.includes('tel')) return combinedPhone || senderInfo.phone || '';
+  // if ((text.includes('法人') && text.includes('個人')) || text.includes('法人／個人')) {
+  //   return senderInfo.companyType || '';
+  // }
+  // if (text.includes('会社') || text.includes('法人') || text.includes('組織')) {
+  //   return senderInfo.company || senderInfo.organization || '';
+  // }
+  // if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
+  // if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
+  // if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
+  //   return combinedPostalCode || combinedAddress || senderInfo.address || '';
+  // }
+  // if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
+  //   return senderInfo.subject || '';
+  // }
+  // if (text.includes('内容') || text.includes('message') || text.includes('問い合わせ')) {
+  //   return message || '';
+  // }
+  // return '';
 }
 
 
@@ -376,8 +376,7 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
             let candidate =
               options.find((o) => desired && norm(o.label) === desired) ||
               options.find((o) => desired && norm(o.label).includes(desired)) ||
-              options.find((o) => !o.disabled) ||
-              options[0];
+              options.find((o) => !o.disabled);
             if (!candidate) return null;
 
             const inputEl = inputs[candidate.index];
@@ -419,6 +418,17 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
   console.warn(
     `⚠️ チェックボックスをクリックできませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+  // ★入力せず、otherで記録する
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: '',
+    value: '',
+  });
   return false;
 }
 
@@ -467,8 +477,9 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
               if (partial) return partial;
             }
 
-            const firstEnabled = options.find((o) => !o.disabled);
-            return firstEnabled || options[0];
+            // const firstEnabled = options.find((o) => !o.disabled);
+            // return firstEnabled || options[0];
+            return null;
           },
           { selector: sel, desiredLabel: value }
         );
@@ -499,6 +510,18 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
   console.warn(
     `⚠️ radio に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+
+  
+  // ★入力せず、otherで記録する
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
+  pushFilledSummary(filledSummary, meta, { 
+    selector: 'other', 
+    value: otherVal });
   return false;
 }
 
@@ -573,22 +596,22 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
           { selector: sel }
         );
 
-        if (fallback) {
-          await frame.selectOption(sel, fallback.value);
+        // if (fallback) {
+        //   await frame.selectOption(sel, fallback.value);
 
-          console.log(
-            `🔽 Fallback select "${fallback.label}" (value="${fallback.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
-          );
+        //   console.log(
+        //     `🔽 Fallback select "${fallback.label}" (value="${fallback.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
+        //   );
 
-          pushFilledSummary(filledSummary, meta, {
-            selector: sel,
-            value: fallback.label,
-            optionValue: fallback.value,
-            isFallback: true
-          });
+        //   pushFilledSummary(filledSummary, meta, {
+        //     selector: sel,
+        //     value: fallback.label,
+        //     optionValue: fallback.value,
+        //     isFallback: true
+        //   });
 
-          return true;
-        }
+        //   return true;
+        // }
       } catch (_e) {
         // この selector / frame はあきらめて次へ
       }
@@ -598,6 +621,18 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
   console.warn(
     `⚠️ select に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+
+  // ★入力せず、otherで記録する
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: '',
+    value: '',
+  });
   return false;
 }
 
