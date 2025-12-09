@@ -731,6 +731,13 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       multiValue: multiValue.length ? multiValue : undefined, // ★ ここに複数値を残す
     };
 
+    // role=other は入力を行わずサマリだけ残す
+    if (role === 'other') {
+      const otherVal = label || nameAttr || idAttr || '';
+      pushFilledSummary(filledSummary, meta, { selector: 'other', value: otherVal });
+      continue;
+    }
+
     // ---- ここまで「複数 role 対応」 ----
 
     if (type === 'checkbox') {
