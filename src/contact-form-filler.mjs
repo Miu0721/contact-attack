@@ -3,7 +3,6 @@
 // 「お問い合わせ種別」で選びたいラベル
 const CATEGORY_LABEL = '案件のご依頼';
 
-
 function selectorsForField(type, nameAttr, idAttr) {
   const selectors = [];
 
@@ -84,7 +83,7 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
           if (selector && filledSelectors.has(selector)) return false;
           return true;
         });
-        return els[0] || null;
+        return null;
       },
       { allowed: allowedTags, filled: filledSummary }
     );
@@ -149,13 +148,15 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.firstNameKana || senderInfo.nameKana || '';
   }
 
-  // 旧 snake_case 互換（AI 側の role は基本ここには来ない想定だけど一応）
-  if (role === 'name_kana') return senderInfo.nameKana || '';
-  if (role === 'first_name') return senderInfo.firstName || senderInfo.name || '';
-  if (role === 'last_name') return senderInfo.lastName || senderInfo.name || '';
-  if (role === 'first_name_kana') return senderInfo.firstNameKana || senderInfo.nameKana || '';
-  if (role === 'last_name_kana') return senderInfo.lastNameKana || senderInfo.nameKana || '';
-
+  if (role === 'nameHira') {
+    return senderInfo.nameHira || '';
+  }
+  if (role === 'firstNameHira') {
+    return senderInfo.firstNameHira || '';
+  }
+  if (role === 'lastNameHira') {
+    return senderInfo.lastNameHira || '';
+  }
   // 連絡先系
   if (role === 'email') {
     return senderInfo.email || '';
@@ -163,79 +164,23 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'confirmEmail') {
     return senderInfo.confirmEmail || '';
   }
-  if (role === 'phone') {
-    return combinedPhone || senderInfo.phone || '';
-  }
-  if (role === 'personalPhone' || role === 'personal_phone') {
-    return senderInfo.personalPhone || combinedPhone || senderInfo.phone || '';
-  }
-  if (role === 'city') {
-    return senderInfo.city || '';
-  }
-  if (role === 'town') {
-    return senderInfo.town || '';
-  }
-  if (role === 'street') {
-    return senderInfo.street || '';
-  }
-  if (role === 'streetAddress') {
-    return combinedStreetAddress || '';
-  }
-  if (role === 'building') {
-    return senderInfo.building || '';
-  }
 
-  // 会社情報系
-  if (role === 'company-name' || role === 'company_name' || role === 'companyName') {
+  if (role === 'companyName') {
     return senderInfo.company || senderInfo.companyName || '';
   }
+
+  if (role === 'companyNameKana') {
+    return senderInfo.companyNameKana || '';
+  }
+
   if (role === 'department') {
     return senderInfo.department || '';
   }
-  if (role === 'industry') {
-    return senderInfo.industry || '';
-  }
-  if (role === 'companyType' || role === 'company_type') {
-    return senderInfo.companyType || '';
-  }
-  if (role === 'position') {
-    return senderInfo.position || '';
-  }
-  if (role === 'corporateSiteUrl') {
-    return (
-      senderInfo.corporateSiteUrl ||''
-    );
-  }
-  // 旧 role 互換
-  if (role === 'company') return senderInfo.company || '';
-  if (role === 'company_phone') {
-    return senderInfo.companyPhone || senderInfo.phone || '';
-  }
-  if (role === 'organization') {
-    return senderInfo.company || senderInfo.organization || '';
+
+  if (role === 'phone') {
+    return combinedPhone || senderInfo.phone || '';
   }
 
-  // プロファイル系
-  if (role === 'referral') {
-    return senderInfo.referral || '';
-  }
-  if (role === 'gender') {
-    return senderInfo.gender || '';
-  }
-  if (role === 'age') {
-    return senderInfo.age || '';
-  }
-
-  // 住所系
-  if (role === 'postalCode1' || role === 'postal_code1') {
-    return postalCode1 || '';
-  }
-  if (role === 'postalCode2' || role === 'postal_code2') {
-    return postalCode2 || '';
-  }
-  if (role === 'postalCode' || role === 'postal_code') {
-    return combinedPostalCode || '';
-  }
   if (role === 'phone1') {
     return phone1 || '';
   }
@@ -245,38 +190,83 @@ function valueForRole(role, senderInfo, message) {
   if (role === 'phone3') {
     return phone3 || '';
   }
+
+  if (role === 'corporateSiteUrl') {
+    return senderInfo.corporateSiteUrl ||'';
+  }
+  if (role === 'position') {
+    return senderInfo.position || '';
+  }
+
+  if (role === 'referral') {
+    return senderInfo.referral || '';
+  }
+
+  if (role === 'gender') {
+    return senderInfo.gender || '';
+  }
+
+  if (role === 'country') {
+    return senderInfo.country || '';
+  }
+
+  if (role === 'postalCode1') {
+    return postalCode1 || '';
+  }
+  if (role === 'postalCode2') {
+    return postalCode2 || '';
+  }
+  if (role === 'postalCode') {
+    return combinedPostalCode || '';
+  }
+
   if (role === 'prefecture') {
     return senderInfo.prefecture || '';
   }
+
+  if (role === 'city') {
+    return senderInfo.city || '';
+  }
+  if (role === 'town') {
+    return senderInfo.town || '';
+  }
+  if (role === 'street') {
+    return senderInfo.street || '';
+  }
+
+  if (role === 'building') {
+    return senderInfo.building || '';
+  }
+
   if (role === 'address') {
     return combinedAddress || senderInfo.address || '';
+  }
+
+  if (role === 'streetAddress') {
+    return combinedStreetAddress || '';
+  }
+
+  if (role === 'age') {
+    return senderInfo.age || '';
+  }
+
+  if (role === 'subject') {
+    return senderInfo.subject || '';
   }
 
   if (role === 'inquiryType') {
     return senderInfo.inquiryType || CATEGORY_LABEL;
   }
 
-  if (role === 'country') {
-    return senderInfo.country || '';
+  if (role === 'industry') {
+    return senderInfo.industry || '';
   }
-  // 件名・本文
-  if (role === 'subject') {
-    return senderInfo.subject || '';
+  if (role === 'companyType') {
+    return senderInfo.companyType || '';
   }
+
   if (role === 'message') {
     return message || senderInfo.message || '';
-  }
-  if (role === 'companyNameKana') {
-    return senderInfo.companyNameKana || '';
-  }
-  if (role === 'nameHira') {
-    return senderInfo.nameHira || '';
-  }
-  if (role === 'firstNameHira') {
-    return senderInfo.firstNameHira || '';
-  }
-  if (role === 'lastNameHira') {
-    return senderInfo.lastNameHira || '';
   }
 
   // "other" や未知の role は空文字
@@ -303,28 +293,6 @@ function valueFromLabelFallback(label, senderInfo, message) {
   ]
     .filter(Boolean)
     .join('');
-
-  if (text.includes('氏名') || text.includes('名前')) return senderInfo.name || '';
-  if (text.includes('メール') || text.includes('email')) return senderInfo.email || '';
-  if (text.includes('電話') || text.includes('tel')) return combinedPhone || senderInfo.phone || '';
-  if ((text.includes('法人') && text.includes('個人')) || text.includes('法人／個人')) {
-    return senderInfo.companyType || '';
-  }
-  if (text.includes('会社') || text.includes('法人') || text.includes('組織')) {
-    return senderInfo.company || senderInfo.organization || '';
-  }
-  if (text.includes('部署') || text.includes('所属')) return senderInfo.department || '';
-  if (text.includes('役職') || text.includes('肩書')) return senderInfo.position || '';
-  if (text.includes('郵便') || text.includes('住所') || text.includes('所在地')) {
-    return combinedPostalCode || combinedAddress || senderInfo.address || '';
-  }
-  if (text.includes('件名') || text.includes('タイトル') || text.includes('subject')) {
-    return senderInfo.subject || '';
-  }
-  if (text.includes('内容') || text.includes('message') || text.includes('問い合わせ')) {
-    return message || '';
-  }
-  return '';
 }
 
 
@@ -376,8 +344,7 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
             let candidate =
               options.find((o) => desired && norm(o.label) === desired) ||
               options.find((o) => desired && norm(o.label).includes(desired)) ||
-              options.find((o) => !o.disabled) ||
-              options[0];
+              options.find((o) => !o.disabled);
             if (!candidate) return null;
 
             const inputEl = inputs[candidate.index];
@@ -419,6 +386,11 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
   console.warn(
     `⚠️ チェックボックスをクリックできませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: '',
+    value: '',
+  });
   return false;
 }
 
@@ -467,8 +439,7 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
               if (partial) return partial;
             }
 
-            const firstEnabled = options.find((o) => !o.disabled);
-            return firstEnabled || options[0];
+            return null;
           },
           { selector: sel, desiredLabel: value }
         );
@@ -499,6 +470,18 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
   console.warn(
     `⚠️ radio に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+
+  // ★入力せず、otherで記録する
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: 'other',
+    value: meta.label || '',
+  });
   return false;
 }
 
@@ -551,44 +534,6 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
 
           return true;
         }
-
-        // ② fallback: 「選択してください」以外の最初の option を選ぶ
-        const fallback = await frame.evaluate(
-          ({ selector }) => {
-            const el = document.querySelector(selector);
-            if (!el || !(el instanceof HTMLSelectElement)) return null;
-
-            const options = Array.from(el.options)
-              .map((o) => ({
-                value: o.value,
-                label: o.textContent.trim(),
-              }))
-              .filter((o) => {
-                const t = o.label;
-                return t && !/選択してください|please select/i.test(t);
-              });
-
-            return options[0] || null;
-          },
-          { selector: sel }
-        );
-
-        if (fallback) {
-          await frame.selectOption(sel, fallback.value);
-
-          console.log(
-            `🔽 Fallback select "${fallback.label}" (value="${fallback.value}") for role="${meta.role}" via ${sel} (frame: ${frame.url()})`
-          );
-
-          pushFilledSummary(filledSummary, meta, {
-            selector: sel,
-            value: fallback.label,
-            optionValue: fallback.value,
-            isFallback: true
-          });
-
-          return true;
-        }
       } catch (_e) {
         // この selector / frame はあきらめて次へ
       }
@@ -598,6 +543,17 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
   console.warn(
     `⚠️ select に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
+
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: '',
+    value: '',
+  });
   return false;
 }
 
@@ -733,8 +689,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
 
     // role=other は入力を行わずサマリだけ残す
     if (role === 'other') {
-      const otherVal = label || nameAttr || idAttr || '';
-      pushFilledSummary(filledSummary, meta, { selector: 'other', value: otherVal });
+      pushFilledSummary(filledSummary, meta, { selector: 'other', value: '' });
       continue;
     }
 
