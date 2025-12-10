@@ -165,7 +165,7 @@ function valueForRole(role, senderInfo, message) {
     return senderInfo.confirmEmail || '';
   }
 
-  if (role === 'company-name') {
+  if (role === 'companyName') {
     return senderInfo.company || senderInfo.companyName || '';
   }
 
@@ -543,6 +543,12 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
   console.warn(
     `⚠️ select に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
 
   pushFilledSummary(filledSummary, otherMeta, {
     selector: '',

@@ -149,9 +149,12 @@ export async function loadSenderFromSheet() {
 
   const sheets = await getSheets();
 
-  // Sender!A2:B100 に「key / value」形式で入っている想定
+  /* 
+  sender情報のA列に変更を加えた際のコード変更箇所！！
+  */ 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
+    // （変更箇所！）sender情報の使用箇所のrangeを指定する
     range: `${SENDER_SHEET_NAME}!A2:B100`,
   });
 
@@ -168,54 +171,45 @@ export async function loadSenderFromSheet() {
     map[String(key).trim()] = value || '';
   }
 
+  // （変更箇所！）sender情報の項目を順番通りに並べる。　項目を増やした場合は、下に追加してください。{A列の値： map.A列の値}
   const senderInfo = {
     name: map.name,
-    nameKana: map.nameKana,
     lastName: map.lastName,
     firstName: map.firstName,
+    nameKana: map.nameKana,
     lastNameKana: map.lastNameKana,
     firstNameKana: map.firstNameKana,
-    position: map.position,
-    companyPhone: map.companyPhone,
-    personalPhone: map.personalPhone,
-    referral: map.referral,
-    gender: map.gender,
-    industry: map.industry,
-    companyType: map.companyType,
-    subject: map.subject,
-    prefecture: map.prefecture,
-    address: map.address,
-    age: map.age,
+    nameHira: map.nameHira,
+    firstNameHira: map.firstNameHira,
+    lastNameHira: map.lastNameHira,
     email: map.email,
-    company: map.company,
+    comfirmEmail: map.comfirmEmail,
+    companyName: map.companyName,
+    companyNameKana: map.companyNameKana,
     department: map.department,
-    postalCode1: map.postalCode1,
-    postalCode2: map.postalCode2,
     phone1: map.phone1,
     phone2: map.phone2,
     phone3: map.phone3,
+    corporateSiteUrl: map.corporateSiteUrl,
+    position: map.position,
+    referral: map.referral,
+    gender: map.gender,
+    country: map.country,
+    postalCode1: map.postalCode1,
+    postalCode2: map.postalCode2,
     prefecture: map.prefecture,
     city: map.city,
     town: map.town,
     street: map.street,
     building: map.building,
-    corporateSiteUrl: map.corporateSiteUrl,
-    companyNameKana: map.companyNameKana, 
-    nameHira: map.nameHira,
-    firstNameHira: map.firstNameHira,
-    lastNameHira: map.lastNameHira,
+    age: map.age,
+    subject: map.subject,
+    inquiryType: map.inquiryType, 
+    industry: map.industry,
+    message: map.message,
   };
 
-  const message = map.message;
-  const companyTopUrl = map.companyTopUrl;
-  const contactPrompt = map.contactPrompt;
-
-  return {
-    senderInfo,
-    message,
-    companyTopUrl,
-    contactPrompt,
-  };
+  return {senderInfo};
 }
 
 /**
