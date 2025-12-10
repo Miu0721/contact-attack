@@ -123,6 +123,7 @@ function valueForRole(role, senderInfo, message) {
   const combinedStreetAddress = [
     senderInfo.town || '',
     senderInfo.street || '',
+    senderInfo.building || '',
   ]
     .filter(Boolean)
     .join('');
@@ -387,6 +388,12 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
     `⚠️ チェックボックスをクリックできませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
 
+  const otherMeta = {
+    ...meta,
+    originalRole: meta.role,
+    role: 'other',
+    roles: ['other'],
+  };
   pushFilledSummary(filledSummary, otherMeta, {
     selector: '',
     value: '',

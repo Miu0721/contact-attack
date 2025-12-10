@@ -76,7 +76,7 @@ async function getContactRoleHeaders() {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     // J列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
-    range: `Contacts!J1:BA1`,
+    range: `Contacts!K1:BA1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -285,7 +285,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   // Contacts!J{rowIndex} から右方向に rowValues を書き込む
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `Contacts!J${rowIndex}`,
+    range: `Contacts!K${rowIndex}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [rowValues],
@@ -368,19 +368,20 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
   }
 
   // ★ 追加: role === 'other' のラベルを集める（Contacts!K列用）
-  const otherLabels = [];
-  normalizedEntries.forEach((item, idx) => {
-    const role = item.role || 'field';
-    if (role === 'other') {
+// --- normalizedEntries を作った後あたりに追加 ---
+// role === 'other' のラベルを集める（Contacts!J列用）
+  const otherLabels = normalizedEntries
+    .filter((item) => item && (item.role || 'field') === 'other')
+    .map((item, idx) => {
       const label =
         item.label ||
         item.nameAttr ||
         item.idAttr ||
         `field${idx + 1}`;
-      const display = item.required ? `required${label}` : label;
-      otherLabels.push(display);
-    }
-  });
+      // 必須なら required を付けたい場合
+      return item.required ? `required${label}` : label;
+    })
+    .filter((s) => s !== '');
 
   const timestamp = new Date().toISOString();
 
@@ -437,21 +438,20 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     // Contacts の K列 & J列以降にも値を反映
     if (contact && contact.rowIndex) {
       const rowIndex = contact.rowIndex;
-
-      // other ラベル一覧を K列に書き込む
+    
+      // other ラベル一覧を J列に書き込む（複数なら / でくっつける）
       if (otherLabels.length > 0) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Contacts!K${rowIndex}`,
+          range: `Contacts!J${rowIndex}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: {
-            // 例: 「ラベル1 / ラベル2 / ラベル3」
-            values: [[otherLabels.join(' / ')]],
+            values: [[otherLabels.join(' / ')]], // ← ここでくっつけて1セルに
           },
         });
       }
 
-      // 既存処理: role ごとの値を J列以降へ
+      // 既存処理: role ごとの値を L列以降へ
       await updateContactFormFieldLog(contact, normalizedEntries);
     }
   } catch (err) {
