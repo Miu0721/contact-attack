@@ -20,6 +20,7 @@ function scoreLinkForContact(link) {
   if (t.match(/資料請求|ご相談|ご連絡/)) score += 6;
 
   // ✅ URL に contact / inquiry / support が入っていたら激アツ
+  if (t.includes('/contact/jp')) score += 20;
   if (t.includes('/contact')) score += 20;
   if (t.includes('/inquiry')) score += 15;
   if (t.includes('/support')) score += 8;

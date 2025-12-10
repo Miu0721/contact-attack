@@ -150,11 +150,11 @@ export async function loadSenderFromSheet() {
   const sheets = await getSheets();
 
   /* 
-  sender情報のA列に変更を加えた際のコード変更箇所！！
+  NOTE: スプシのsender情報を変更したら、ここを対応！
   */ 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // （変更箇所！）sender情報の使用箇所のrangeを指定する
+    // NOTE: スプシのsender情報を変更したら、ここを対応！
     range: `${SENDER_SHEET_NAME}!A2:B100`,
   });
 
@@ -171,7 +171,7 @@ export async function loadSenderFromSheet() {
     map[String(key).trim()] = value || '';
   }
 
-  // （変更箇所！）sender情報の項目を順番通りに並べる。　項目を増やした場合は、下に追加してください。{A列の値： map.A列の値}
+  // NOTE: スプシのsender情報を変更したら、ここを対応！{A列の値： map.A列の値}
   const senderInfo = {
     name: map.name,
     lastName: map.lastName,
