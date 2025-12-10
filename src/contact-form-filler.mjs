@@ -3,7 +3,6 @@
 // 「お問い合わせ種別」で選びたいラベル
 const CATEGORY_LABEL = '案件のご依頼';
 
-
 function selectorsForField(type, nameAttr, idAttr) {
   const selectors = [];
 
@@ -84,7 +83,7 @@ function firstUnfilledInput(frame, filledSummary, allowedTags = ['input', 'texta
           if (selector && filledSelectors.has(selector)) return false;
           return true;
         });
-        return els[0] || null;
+        return null;
       },
       { allowed: allowedTags, filled: filledSummary }
     );
@@ -387,13 +386,7 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
   console.warn(
     `⚠️ チェックボックスをクリックできませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
-  // ★入力せず、otherで記録する
-  const otherMeta = {
-    ...meta,
-    originalRole: meta.role,
-    role: 'other',
-    roles: ['other'],
-  };
+
   pushFilledSummary(filledSummary, otherMeta, {
     selector: '',
     value: '',
@@ -478,7 +471,6 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
     `⚠️ radio に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
 
-  
   // ★入力せず、otherで記録する
   const otherMeta = {
     ...meta,
@@ -486,9 +478,10 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
     role: 'other',
     roles: ['other'],
   };
-  pushFilledSummary(filledSummary, meta, { 
-    selector: 'other', 
-    value: otherVal });
+  pushFilledSummary(filledSummary, otherMeta, {
+    selector: 'other',
+    value: meta.label || '',
+  });
   return false;
 }
 
@@ -551,13 +544,6 @@ async function selectOption(page, selectors, value, meta, filledSummary) {
     `⚠️ select に値を設定できませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
 
-  // ★入力せず、otherで記録する
-  const otherMeta = {
-    ...meta,
-    originalRole: meta.role,
-    role: 'other',
-    roles: ['other'],
-  };
   pushFilledSummary(filledSummary, otherMeta, {
     selector: '',
     value: '',
@@ -697,8 +683,7 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
 
     // role=other は入力を行わずサマリだけ残す
     if (role === 'other') {
-      const otherVal = label || nameAttr || idAttr || '';
-      pushFilledSummary(filledSummary, meta, { selector: 'other', value: otherVal });
+      pushFilledSummary(filledSummary, meta, { selector: 'other', value: '' });
       continue;
     }
 
