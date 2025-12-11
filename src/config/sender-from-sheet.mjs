@@ -61,7 +61,7 @@ async function getSheets() {
 }
 
 /**
- * Contacts シートの J1 以降から role 名のヘッダーを取得
+ * Contacts シートの L1 以降から role 名のヘッダーを取得
  * 例: ['name', 'lastName', 'firstName', ...]
  */
 async function getContactRoleHeaders() {
@@ -71,9 +71,9 @@ async function getContactRoleHeaders() {
   const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // K列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
+    // L列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
     // NOTE: スプシのContactsに項目増やしたら、ここを対応！
-    range: `Contacts!K1:AX1`,
+    range: `Contacts!L1:AY1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -162,7 +162,7 @@ export async function loadSenderFromSheet() {
 }
 
 /**
- * Contacts シートの K列以降に、
+ * Contacts シートの L列以降に、
  * role ごとの入力値を1行分書き込む
  *
  * @param {Object} contact - Contacts シート1行分のオブジェクト（rowIndex 必須）
@@ -185,7 +185,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const headers = await getContactRoleHeaders();
   if (!headers.length) {
     console.warn(
-      'updateContactFormFieldLog: Contacts シートの K1 以降にヘッダーがありません'
+      'updateContactFormFieldLog: Contacts シートの L1 以降にヘッダーがありません'
     );
     return;
   }
@@ -231,10 +231,10 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const sheets = await getSheets();
   const rowIndex = contact.rowIndex;
 
-  // Contacts!K{rowIndex} から右方向に rowValues を書き込む
+  // Contacts!L{rowIndex} から右方向に rowValues を書き込む
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `Contacts!K${rowIndex}`,
+    range: `Contacts!L${rowIndex}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [rowValues],
@@ -310,7 +310,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     return;
   }
 
-  // --- role === 'other' のラベルを集める（Contacts!J列用） ---
+  // --- role === 'other' のラベルを集める（Contacts!K列用） ---
   const otherLabels = normalizedEntries
     .filter((item) => item && (item.role || 'field') === 'other')
     .map((item, idx) => {
@@ -329,15 +329,15 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     const sheets = await getSheets();
 
 
-    // --- Contacts の J列 & K列以降にだけ値を反映 ---
+    // --- Contacts の K列 & L列以降にだけ値を反映 ---
     if (contact && contact.rowIndex) {
       const rowIndex = contact.rowIndex;
 
-      // other ラベル一覧を J列に書き込む（複数なら / でくっつける）
+      // other ラベル一覧を K列に書き込む（複数なら / でくっつける）
       if (otherLabels.length > 0) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `Contacts!J${rowIndex}`,
+          range: `Contacts!K${rowIndex}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: {
             values: [[otherLabels.join(' / ')]], // ← ここでくっつけて1セルに
@@ -345,7 +345,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
         });
       }
 
-      // 既存処理: role ごとの値を K列以降へ
+      // 既存処理: role ごとの値を L列以降へ
       await updateContactFormFieldLog(contact, normalizedEntries);
     }
   } catch (err) {

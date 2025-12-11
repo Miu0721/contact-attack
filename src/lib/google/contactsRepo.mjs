@@ -63,8 +63,8 @@ async function getContactsSheetId() {
 export async function fetchContacts() {
   const sheets = await getSheets();
 
-  // A:I 既存列 + 新規の住所分割列（J〜N）も読み取る
-  const range = `${CONTACTS_SHEET_NAME}!A2:N`; // 1行目はヘッダ想定
+  // A列に空列を追加したため、実データは B:J + 拡張列（K〜O）を読み取る
+  const range = `${CONTACTS_SHEET_NAME}!B2:O`; // 1行目はヘッダ想定
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range,
@@ -105,7 +105,7 @@ export async function fetchContacts() {
 
 /**
  * 既存の contact オブジェクトに patch をマージして、
- * A〜I列の1行まるごとを更新する
+ * B〜J列の1行まるごとを更新する
  *
  * contact: fetchContacts() で取ってきた1行分
  * patch:   上書きしたいフィールドだけ指定してOK
@@ -134,7 +134,7 @@ export async function updateContactRowValues(contact, patch) {
     ],
   ];
 
-  const range = `${CONTACTS_SHEET_NAME}!A${rowIndex}:I${rowIndex}`;
+  const range = `${CONTACTS_SHEET_NAME}!B${rowIndex}:J${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
@@ -144,6 +144,40 @@ export async function updateContactRowValues(contact, patch) {
       values,
     },
   });
+}
+
+/**
+ * Contacts シートを右に 1 列シフトする（A列に空列を挿入する）
+ * 既存データとフォーマットはそのまま右へ移動する。
+ */
+export async function shiftContactsSheetOneColumnRight() {
+  if (!SPREADSHEET_ID) {
+    throw new Error('SHEET_ID が未設定です');
+  }
+
+  const sheets = await getSheets();
+  const sheetId = await getContactsSheetId();
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          insertDimension: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: 0, // A列の前に1列追加
+              endIndex: 1,
+            },
+            inheritFromBefore: false,
+          },
+        },
+      ],
+    },
+  });
+
+  console.log('Contacts シートの全列を右に1列シフトしました');
 }
 
 /**
@@ -185,8 +219,8 @@ export async function updateContactRowColor(rowIndex, status) {
               sheetId,
               startRowIndex,
               endRowIndex: startRowIndex + 1,
-              startColumnIndex: 0, // A列
-              endColumnIndex: 9, // I列 (0〜8)
+              startColumnIndex: 1, // B列
+              endColumnIndex: 10, // J列 (1〜9)
             },
             cell: {
               userEnteredFormat: {
