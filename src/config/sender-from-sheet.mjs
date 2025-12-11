@@ -10,12 +10,8 @@ const SPREADSHEET_ID = process.env.SHEET_ID;
 const SENDER_SHEET_NAME = 'Sender';
 
 // 詳細ログ用タブ名（1送信=1行で質問/回答を残したい場合）
-// ※ 今回 FormLogs シート関連はコメントアウトしているが、定数自体は残しておく
-const FORM_LOG_SHEET_NAME =
-  process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
 
 let sheetsClient = null;
-let formLogSheetChecked = false;
 let contactRoleHeadersCache = null;
 
 /**
@@ -76,7 +72,8 @@ async function getContactRoleHeaders() {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     // K列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
-    range: `Contacts!K1:BA1`,
+    // NOTE: スプシのContactsに項目増やしたら、ここを対応！
+    range: `Contacts!K1:AX1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -252,8 +249,6 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
  *
  * @param {Object} params
  * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
- * @param {string} params.contactUrl - 実際にアクセスした問い合わせURL
- * @param {string} params.siteUrl - 企業サイトのURL
  * @param {Array} params.filledSummary - fillContactForm が返した入力サマリ
  * @param {Object} params.formSchema - analyzeContactFormWithAI の返り値
  */
@@ -267,8 +262,6 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
 
   const {
     contact,
-    contactUrl,
-    siteUrl,
     filledSummary,
     formSchema,
   } = params;
