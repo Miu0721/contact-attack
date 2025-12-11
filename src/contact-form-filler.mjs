@@ -110,7 +110,7 @@ function valueForRole(role, senderInfo, message) {
   const phone2 = senderInfo.phone2 || '';
   const phone3 = senderInfo.phone3 || '';
   const combinedPostalCode = [postalCode1, postalCode2].filter(Boolean).join('-');
-  const combinedPhone = [phone1, phone2, phone3].filter(Boolean).join('-');
+  const combinedPhone = [phone1, phone2, phone3].filter(Boolean).join('');
   const combinedAddress = [
     senderInfo.city || '',
     senderInfo.town || '',
