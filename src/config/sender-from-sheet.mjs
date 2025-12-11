@@ -10,7 +10,7 @@ const SPREADSHEET_ID = process.env.SHEET_ID;
 const SENDER_SHEET_NAME = 'Sender';
 
 // 詳細ログ用タブ名（1送信=1行で質問/回答を残したい場合）
-// 別タブにしたくなければ .env の FORM_LOG_SHEET_NAME を Contacts にしてもOK
+// ※ 今回 FormLogs シート関連はコメントアウトしているが、定数自体は残しておく
 const FORM_LOG_SHEET_NAME =
   process.env.FORM_LOG_SHEET_NAME || 'FormLogs';
 
@@ -75,7 +75,7 @@ async function getContactRoleHeaders() {
   const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    // J列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
+    // K列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
     range: `Contacts!K1:BA1`,
   });
 
@@ -86,58 +86,10 @@ async function getContactRoleHeaders() {
   return headers;
 }
 
-/**
- * FormLogs シートが存在しなければ作成する
- */
-async function ensureFormLogSheetExists() {
-  if (formLogSheetChecked) return;
-  if (!SPREADSHEET_ID) return;
-
-  const sheets = await getSheets();
-
-  try {
-    const res = await sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
-    });
-
-    const exists = res.data.sheets?.some(
-      (s) => s.properties?.title === FORM_LOG_SHEET_NAME
-    );
-
-    if (!exists) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: {
-                  title: FORM_LOG_SHEET_NAME,
-                },
-              },
-            },
-          ],
-        },
-      });
-
-      // ★必要ならここで FormLogs のヘッダーを書く（任意）
-      // await sheets.spreadsheets.values.update({
-      //   spreadsheetId: SPREADSHEET_ID,
-      //   range: `${FORM_LOG_SHEET_NAME}!A1:E1`,
-      //   valueInputOption: 'USER_ENTERED',
-      //   requestBody: { values: [['timestamp','companyName','rowIndex','siteUrl','contactUrl']] },
-      // });
-    }
-  } catch (_err) {
-    // ここでの失敗は append 側でリトライ・ログする
-  } finally {
-    formLogSheetChecked = true;
-  }
-}
 
 /**
  * Sender シートから自社情報を取得して、
- * { senderInfo, message, companyTopUrl, contactPrompt } を返す
+ * { senderInfo } を返す
  */
 export async function loadSenderFromSheet() {
   if (!SPREADSHEET_ID) {
@@ -209,11 +161,11 @@ export async function loadSenderFromSheet() {
     message: map.message,
   };
 
-  return {senderInfo};
+  return { senderInfo };
 }
 
 /**
- * Contacts シートの J列以降に、
+ * Contacts シートの K列以降に、
  * role ごとの入力値を1行分書き込む
  *
  * @param {Object} contact - Contacts シート1行分のオブジェクト（rowIndex 必須）
@@ -236,7 +188,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const headers = await getContactRoleHeaders();
   if (!headers.length) {
     console.warn(
-      'updateContactFormFieldLog: Contacts シートの J1 以降にヘッダーがありません'
+      'updateContactFormFieldLog: Contacts シートの K1 以降にヘッダーがありません'
     );
     return;
   }
@@ -282,7 +234,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
   const sheets = await getSheets();
   const rowIndex = contact.rowIndex;
 
-  // Contacts!J{rowIndex} から右方向に rowValues を書き込む
+  // Contacts!K{rowIndex} から右方向に rowValues を書き込む
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `Contacts!K${rowIndex}`,
@@ -367,9 +319,7 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     return;
   }
 
-  // ★ 追加: role === 'other' のラベルを集める（Contacts!K列用）
-// --- normalizedEntries を作った後あたりに追加 ---
-// role === 'other' のラベルを集める（Contacts!J列用）
+  // --- role === 'other' のラベルを集める（Contacts!J列用） ---
   const otherLabels = normalizedEntries
     .filter((item) => item && (item.role || 'field') === 'other')
     .map((item, idx) => {
@@ -383,62 +333,15 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
     })
     .filter((s) => s !== '');
 
-  const timestamp = new Date().toISOString();
-
-  // --- ② FormLogs 用の1行ぶんデータを組み立てる ---
-
-  // A〜E列: メタ情報
-  const baseCols = [
-    timestamp, // A
-    contact?.companyName || '', // B
-    contact?.rowIndex || '', // C
-    siteUrl || contact?.siteUrl || '', // D
-    contactUrl || contact?.contactUrl || '', // E
-  ];
-
-  // F列以降: 「質問(ラベル/role)」→「回答」の順で横展開
-  const answerCols = [];
-  normalizedEntries.forEach((item, idx) => {
-    const label = item.label || item.nameAttr || item.idAttr || `field${idx + 1}`;
-    const role = item.role || 'field';
-    const key = `${role}:${label}`;
-    const rawVal = item.value != null ? String(item.value) : '';
-    const val = item.required ? `required${rawVal}` : rawVal;
-    answerCols.push(key, val); // 質問 → 回答 のペア
-  });
-
-  const row = [...baseCols, ...answerCols];
 
   try {
     const sheets = await getSheets();
 
-    await ensureFormLogSheetExists();
 
-    // A列の最終行+1 を探して、そこに1行書き込む
-    const existing = await sheets.spreadsheets.values
-      .get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${FORM_LOG_SHEET_NAME}!A:A`,
-      })
-      .catch(() => ({ data: { values: [] } }));
-
-    const startRow =
-      (existing.data.values && existing.data.values.length) || 0;
-    const startIndex = startRow + 1; // 1-based
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${FORM_LOG_SHEET_NAME}!A${startIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [row],
-      },
-    });
-
-    // Contacts の K列 & J列以降にも値を反映
+    // --- Contacts の J列 & K列以降にだけ値を反映 ---
     if (contact && contact.rowIndex) {
       const rowIndex = contact.rowIndex;
-    
+
       // other ラベル一覧を J列に書き込む（複数なら / でくっつける）
       if (otherLabels.length > 0) {
         await sheets.spreadsheets.values.update({
@@ -451,12 +354,12 @@ export async function appendFormQuestionsAndAnswers(params = {}) {
         });
       }
 
-      // 既存処理: role ごとの値を L列以降へ
+      // 既存処理: role ごとの値を K列以降へ
       await updateContactFormFieldLog(contact, normalizedEntries);
     }
   } catch (err) {
     console.warn(
-      `appendFormQuestionsAndAnswers: ログシート/Contacts シートへの書き込みに失敗`,
+      `appendFormQuestionsAndAnswers: Contacts シートへの書き込みに失敗`,
       err.message || err
     );
   }
