@@ -244,9 +244,7 @@ export async function updateContactFormFieldLog(contact, filledSummary = []) {
 
 
 /**
- * フォームの質問項目と入力値を FormLogs シートに 1行 追記する
- * ついでに、Contacts シートの J列以降に role ごとの値も反映する。
- *
+ * Contacts シートに結果を出力。
  * @param {Object} params
  * @param {Object} params.contact - Contactsシート1行分のオブジェクト（任意）
  * @param {Array} params.filledSummary - fillContactForm が返した入力サマリ
