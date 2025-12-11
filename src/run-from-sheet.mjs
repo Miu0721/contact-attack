@@ -223,6 +223,15 @@ export async function runFromSheetJob() {
             continue;
           }
 
+          // 送信処理に入る前に入力内容をスプレッドシートへ記録しておく
+          await appendFormLogSafe({
+            contact,
+            contactUrl,
+            siteUrl: contact.siteUrl,
+            filledSummary,
+            formSchema,
+          });
+
           let submitted = false;
           try {
             submitted = await trySubmit(page);
@@ -231,14 +240,6 @@ export async function runFromSheetJob() {
           }
 
           if (submitted) {
-            await appendFormLogSafe({
-              contact,
-              contactUrl,
-              siteUrl: contact.siteUrl,
-              filledSummary,
-              formSchema,
-            });
-
             success = true;
             lastResult = 'submitted';
             status = 'Success';
