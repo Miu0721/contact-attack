@@ -19,7 +19,94 @@ const appendManualNote = (msg) => {
   return msg.includes(note) ? msg : `${msg} ${note}`;
 };
 
-// import { notifySlack } from './lib/slack.mjs';
+// 日本時間に変換
+function getJSTTimestamp() {
+  const date = new Date();
+
+  // 日本時間（UTC+9）に変換
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+  const Y = jst.getUTCFullYear();
+  const M = String(jst.getUTCMonth() + 1).padStart(2, '0');
+  const D = String(jst.getUTCDate()).padStart(2, '0');
+  const h = String(jst.getUTCHours()).padStart(2, '0');
+  const m = String(jst.getUTCMinutes()).padStart(2, '0');
+
+  return `${Y}/${M}/${D} ${h}:${m}`;
+}
+
+// 簡易的に送信ボタンを探してクリックする。成功したら true。
+async function trySubmit(page) {
+  const clickFirst = async (selectors, waitNavigation = false) => {
+    for (const sel of selectors) {
+      try {
+        const locator = page.locator(sel).first();
+        if (await locator.count()) {
+          if (waitNavigation) {
+            await Promise.all([
+              locator.click({ timeout: 3000 }),
+              page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {}),
+            ]);
+          } else {
+            await locator.click({ timeout: 3000 });
+          }
+          console.log('🟢 Clicked button:', sel);
+          return true;
+        }
+      } catch (_e) {
+        // 次の候補へ
+      }
+    }
+    return false;
+  };
+
+  const confirmLabels = ['確認', '確認画面', '次へ', '確認する'];
+
+  // ラベルからセレクタを組み立てる
+  const confirmSelectors = confirmLabels.flatMap((label) => [
+    `button:has-text("${label}")`,
+    // `input[type="submit"][value*="${label}"]`,
+    // `input[type="button"][value*="${label}"]`,
+  ]);
+
+
+  const movedToConfirm = await clickFirst(confirmSelectors, true);
+  if (movedToConfirm) {
+    console.log('確認画面へ進むボタンをクリックしました');
+    await page.waitForTimeout(1000);
+  } else {
+    console.log('確認画面へ進むボタンをクリックできませんでした。');
+  }
+
+  // ✅ こっちもラベルのみ
+  const submitLabels = [  '送信',
+    '送信する',
+    '確認して送信',
+    '申し込み',
+    '申し込む',
+    'この内容で送信',
+    '上記の内容で送信',
+    '内容を送信',
+    '登録',
+    '登録する'];
+
+  const submitSelectors = submitLabels.flatMap((label) => [
+    `button:has-text("${label}")`,
+    // `input[type="submit"][value*="${label}"]`,
+    // `input[type="button"][value*="${label}"]`,
+  ]);
+
+
+  const submitted = await clickFirst(submitSelectors, true);
+  if (submitted) {
+    console.log('🚀 送信ボタンをクリックしました');
+    return true;
+  } else {
+    console.log('ℹ️ 送信ボタンは見つかりませんでした');
+    return false;
+  }
+}
+
 
 async function appendFormLogSafe(params) {
   try {
@@ -43,10 +130,7 @@ export async function runFromSheetJob() {
   const contactPrompt = senderFromSheet?.contactPrompt || '';
 
   console.log('📨 使用する Sender 情報:', senderInfo);
-  console.log(
-    '📝 message の先頭30文字:',
-    message ? message.slice(0, 30) + '...' : '(空)'
-  );
+
 
   const contacts = await fetchContacts();
   if (!contacts.length) {
@@ -74,7 +158,7 @@ export async function runFromSheetJob() {
 
       console.log(`🚀 Processing: ${contact.companyName} (row ${contact.rowIndex})`);
 
-      const timestamp = new Date().toISOString();
+      const timestamp = getJSTTimestamp();
       let runCount = (contact.runCount || 0) + 1;
       let status = 'Failed';
       let lastResult = '';
@@ -151,6 +235,7 @@ export async function runFromSheetJob() {
             continue;
           }
 
+          // 送信処理に入る前に入力内容をスプレッドシートへ記録しておく
           await appendFormLogSafe({
             contact,
             contactUrl,
@@ -159,12 +244,22 @@ export async function runFromSheetJob() {
             formSchema,
           });
 
-          // success = true;
-          // lastResult = submitted ? 'submitted' : 'filled';
-          success = true;
-          lastResult = 'filled';
-          status = 'Success';
-          break;
+          let submitted = false;
+          try {
+            submitted = await trySubmit(page);
+          } catch (submitErr) {
+            console.warn('⚠️ 送信処理でエラー:', submitErr?.message || submitErr);
+          }
+
+          if (submitted) {
+            success = true;
+            lastResult = 'submitted';
+            status = 'Success';
+            break;
+          } else {
+            lastResult = 'filled';
+            lastErrorMsg = '送信ボタンが見つからない / 送信できませんでした';
+          }
         }
 
         if (!success) {
