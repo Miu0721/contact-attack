@@ -92,7 +92,8 @@ async function trySubmit(page) {
 
   const submitSelectors = submitLabels.flatMap((label) => [
     `button:has-text("${label}")`,
-    // `input[type="submit"][value*="${label}"]`,
+    `input[type="submit"][value*="${label}"]`,
+    `input[value*="${label}"]`,    
     // `input[type="button"][value*="${label}"]`,
   ]);
 
