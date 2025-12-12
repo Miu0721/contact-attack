@@ -132,7 +132,7 @@ export async function loadSenderFromSheet() {
     firstNameHira: map.firstNameHira,
     lastNameHira: map.lastNameHira,
     email: map.email,
-    comfirmEmail: map.comfirmEmail,
+    confirmEmail: map.confirmEmail,
     companyName: map.companyName,
     companyNameKana: map.companyNameKana,
     department: map.department,
