@@ -266,6 +266,7 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - "nameHira"
         - "firstNameHira"
         - "lastNameHira"
+        - "agreed"
         - どれにも当てはまらない場合だけ "other"
 
       - **推測しすぎないこと。迷ったら必ず "other" を使う。**
@@ -309,11 +310,13 @@ async function callFormAnalyzerModel(formHtml, senderInfo, message, fieldCountHi
         - お問い合わせ内容・ご質問内容・ご相談内容・メッセージ → "message"
         - 国 → "country"
         - 会社名（カナ） → "companyNameKana"
+        - 同意・確認チェック（プライバシー/利用規約/送信確認など） → "agreed"
       - どれにもはっきり当てはまらない、または判断が難しい場合は **必ず "other"** にしてください。
       
       ### その他
       - プライバシーポリシーへの同意チェックボックスなども、「ユーザーがチェックする要素」であればフィールドとして含めて構いません。
-      
+      - name や id が空であっても、ユーザーが実際に選択肢を選ぶ <select> 要素（特に「お問い合わせ項目」「お問い合わせ種別」などのラベルのすぐ下にあるもの）は、装飾用ではなく入力フィールドとして必ず "fields" に含めてください。
+
       ## 含めるべきフィールド / 無視するフィールド
       ### 含める（出力対象）
       - ユーザーが入力・選択するデータ項目：

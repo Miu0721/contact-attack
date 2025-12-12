@@ -73,7 +73,7 @@ async function getContactRoleHeaders() {
     spreadsheetId: SPREADSHEET_ID,
     // L列以降は role 用のヘッダー。右方向に増えても拾えるよう広めに取得する。
     // NOTE: スプシのContactsに項目増やしたら、ここを対応！
-    range: `Contacts!L1:AY1`,
+    range: `Contacts!L1:AZ1`,
   });
 
   const row = (res.data.values && res.data.values[0]) || [];
@@ -132,7 +132,7 @@ export async function loadSenderFromSheet() {
     firstNameHira: map.firstNameHira,
     lastNameHira: map.lastNameHira,
     email: map.email,
-    comfirmEmail: map.comfirmEmail,
+    confirmEmail: map.confirmEmail,
     companyName: map.companyName,
     companyNameKana: map.companyNameKana,
     department: map.department,
@@ -156,6 +156,7 @@ export async function loadSenderFromSheet() {
     inquiryType: map.inquiryType, 
     industry: map.industry,
     message: map.message,
+    agreed: map.agreed,
   };
 
   return { senderInfo };

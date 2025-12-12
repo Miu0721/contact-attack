@@ -270,120 +270,161 @@ function valueForRole(role, senderInfo, message) {
     return message || senderInfo.message || '';
   }
 
+  if (role === 'agreed') {
+    // 同意系はラベルが「同意」「確認済み」などになることが多いので、そのまま照合用文字列を返す
+    return senderInfo.agreed || '同意';
+  }
+
   // "other" や未知の role は空文字
   return '';
 }
 
 
-// ラベルなどから推測して値を埋める簡易フォールバック
-function valueFromLabelFallback(label, senderInfo, message) {
-  const text = (label || '').toLowerCase();
-  if (!text) return '';
-  const combinedPostalCode = [senderInfo.postalCode1 || '', senderInfo.postalCode2 || '']
-    .filter(Boolean)
-    .join('-');
-  const combinedPhone = [senderInfo.phone1 || '', senderInfo.phone2 || '', senderInfo.phone3 || '']
-    .filter(Boolean)
-    .join('-');
-  const combinedAddress = [
-    senderInfo.prefecture || '',
-    senderInfo.city || '',
-    senderInfo.town || '',
-    senderInfo.street || '',
-    senderInfo.building || '',
-  ]
-    .filter(Boolean)
-    .join('');
-}
-
-
 
 async function fillCheckbox(page, selectors, meta, filledSummary) {
-  for (const frame of allFrames(page)) {
-    for (const sel of selectors) {
-      try {
-        const targetInfo = await frame.evaluate(
-          ({ selector, desiredLabel }) => {
-            const inputs = Array.from(document.querySelectorAll(selector)).filter(
-              (el) => el instanceof HTMLInputElement
-            );
-            if (!inputs.length) return null;
+  const desired = (meta.desiredLabel || '').trim();
+  const combinedSelector = selectors.join(',');
 
+  for (const frame of allFrames(page)) {
+    try {
+      let checkboxLocator = null;
+
+      // --- ✨ 同意ボタン専用ロジック（最優先） --------------------------
+      if (meta.role === 'agreed') {
+        try {
+          const consentTarget = await frame.evaluate(() => {
+            const inputs = Array.from(
+              document.querySelectorAll('input[type="checkbox"], input[type="radio"]')
+            );
+            const norm = (s) => (s || '').trim().toLowerCase();
+            const hasConsent = (s) =>
+              ['同意', '確認', '了承', '送信内容', 'プライバシ', 'privacy', '個人情報', '規約', 'terms', 'agree', 'consent'].some(
+                (kw) => norm(s).includes(norm(kw))
+              );
             const getLabelText = (input) => {
               const id = input.id;
               if (id) {
                 const lbl = document.querySelector(`label[for="${id}"]`);
-                if (lbl) {
-                  const fullLabel = lbl.textContent?.trim() || '';
-                  if (fullLabel) return fullLabel;
-                }
+                if (lbl && lbl.textContent) return lbl.textContent.trim();
               }
               const parentLabel = input.closest('label');
-              if (parentLabel) {
-                const fullLabel = parentLabel.textContent?.trim() || '';
-                if (fullLabel) return fullLabel;
-              }
+              if (parentLabel && parentLabel.textContent) return parentLabel.textContent.trim();
               const parent = input.parentElement;
-              if (parent) {
-                const text = parent.textContent?.trim() || '';
-                if (text) return text;
-              }
+              if (parent && parent.textContent) return parent.textContent.trim();
               return '';
             };
 
-            const options = inputs.map((input, idx) => ({
-              index: idx,
-              value: input.value || '',
-              id: input.id || '',
-              name: input.name || '',
-              label: getLabelText(input) || input.getAttribute('aria-label') || '',
-              disabled: !!input.disabled,
-            }));
+            for (let i = 0; i < inputs.length; i += 1) {
+              const label = getLabelText(inputs[i]);
+              const value = inputs[i].value || '';
+              if (hasConsent(label) || hasConsent(value)) {
+                return { index: i, label: label || value || 'consent' };
+              }
+            }
+            return null;
+          });
 
-            const norm = (s) => (s || '').trim().toLowerCase();
-            const desired = norm(desiredLabel);
-            let candidate =
-              options.find((o) => desired && norm(o.label) === desired) ||
-              options.find((o) => desired && norm(o.label).includes(desired)) ||
-              options.find((o) => !o.disabled);
-            if (!candidate) return null;
+          if (consentTarget) {
+            const handles = await frame.$$(
+              'input[type="checkbox"], input[type="radio"]'
+            );
+            const handle = handles[consentTarget.index];
+            if (handle) {
+              await handle.check({ force: true });
+              const choiceLabel = consentTarget.label || 'consent';
+              console.log(
+                `☑️ 同意チェックを付けました (frame: ${frame.url()}) choice="${choiceLabel}"`
+              );
+              pushFilledSummary(filledSummary, meta, {
+                selector: 'input[type="checkbox"], input[type="radio"]',
+                value: choiceLabel,
+              });
+              return true;
+            }
+          }
+        } catch (e) {
+          console.warn('同意チェック処理でエラー:', e.message);
+        }
+        // 見つからなければ通常ロジックへフォールバック
+      }
+    
 
-            const inputEl = inputs[candidate.index];
-            const label = inputEl
-              ? getLabelText(inputEl) || inputEl.getAttribute('aria-label') || ''
-              : '';
+      // ① desiredLabel があるなら、まずラベルで探す
+      if (desired) {
+        // <label for="..."> や aria-label を使って検索
+        checkboxLocator = frame
+          .getByLabel(desired, { exact: false })
+          .locator('input[type="checkbox"]');
 
-            return {
-              ...candidate,
-              label,
-            };
-          },
-          { selector: sel, desiredLabel: meta.desiredLabel || '' }
-        );
+        // 見つからなければ、テキストに desiredLabel を含む要素から探す
+        if (!(await checkboxLocator.count())) {
+          checkboxLocator = frame
+            .locator(combinedSelector)
+            .filter({ hasText: desired });
+        }
+      }
 
-        const handles = await frame.$$(sel);
-        const handle = targetInfo ? handles[targetInfo.index] : handles[0];
-        if (!handle) continue;
+      // ② まだ見つからない場合は、最初の有効なチェックボックスを使う
+      if (!checkboxLocator || !(await checkboxLocator.count())) {
+        checkboxLocator = frame
+          .locator(combinedSelector)
+          .filter({ hasNot: frame.locator(':disabled') });
+      }
 
-        await handle.check({ force: true });
-        const choiceLabel =
-          targetInfo?.label ||
-          targetInfo?.value ||
-          targetInfo?.id ||
-          targetInfo?.name ||
+      // それでも無ければ次の frame へ
+      if (!(await checkboxLocator.count())) {
+        continue;
+      }
+
+      const handle = checkboxLocator.first();
+      await handle.check({ force: true });
+
+      // ラベル or value などから表示用の文字列を取る
+      const choiceLabel = await handle.evaluate((el) => {
+        const getLabelText = (input) => {
+          const id = input.id;
+          if (id) {
+            const lbl = document.querySelector(`label[for="${id}"]`);
+            if (lbl && lbl.textContent) return lbl.textContent.trim();
+          }
+          const parentLabel = input.closest('label');
+          if (parentLabel && parentLabel.textContent) {
+            return parentLabel.textContent.trim();
+          }
+          const parent = input.parentElement;
+          if (parent && parent.textContent) {
+            return parent.textContent.trim();
+          }
+          return '';
+        };
+
+        const label =
+          getLabelText(el) ||
+          el.getAttribute('aria-label') ||
+          el.value ||
+          el.id ||
+          el.name ||
           'checked';
 
-        console.log(
-          `☑️ Checked checkbox for role="${meta.role}" via ${sel} (choice="${choiceLabel}") (frame: ${frame.url()})`
-        );
-        pushFilledSummary(filledSummary, meta, { selector: sel, value: choiceLabel });
-        return true;
-      } catch (_e) {
-        // try next selector/frame
-      }
+        return label;
+      });
+
+      console.log(
+        `☑️ Checked checkbox for role="${meta.role}" (choice="${choiceLabel}") (frame: ${frame.url()})`
+      );
+
+      pushFilledSummary(filledSummary, meta, {
+        selector: combinedSelector,
+        value: choiceLabel,
+      });
+
+      return true;
+    } catch (_e) {
+      // 次の frame へ
     }
   }
 
+  // どの frame でもチェックできなかった場合
   console.warn(
     `⚠️ チェックボックスをクリックできませんでした role="${meta.role}" name="${meta.nameAttr}" id="${meta.idAttr}"`
   );
@@ -394,10 +435,12 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
     role: 'other',
     roles: ['other'],
   };
+
   pushFilledSummary(filledSummary, otherMeta, {
     selector: '',
     value: '',
   });
+
   return false;
 }
 
@@ -445,6 +488,28 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
                 options.find((o) => norm(o.value).includes(desired));
               if (partial) return partial;
             }
+
+            const matchConsent = (o) => {
+              const l = norm(o.label);
+              const v = norm(o.value);
+              return (
+                l.includes('同意') ||
+                l.includes('確認') ||
+                l.includes('了承') ||
+                l.includes('送信内容') ||
+                l.includes('プライバシ') ||
+                l.includes('privacy') ||
+                l.includes('個人情報') ||
+                l.includes('規約') ||
+                l.includes('terms') ||
+                v.includes('agree') ||
+                v.includes('consent') ||
+                v.includes('同意')
+              );
+            };
+
+            const consentHit = options.find((o) => matchConsent(o));
+            if (consentHit) return consentHit;
 
             return null;
           },
@@ -653,11 +718,6 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       value = multiValue.map((m) => m.value).join(' ・ ');
     }
 
-    // それでも value が空なら、text/textarea 系はラベルからフォールバック
-    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
-      value = valueFromLabelFallback(label, senderInfo, message);
-    }
-
     // まだ value が無くて text 系なら、このフィールドは諦める（other はサマリに残す）
     if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
       if (role === 'other') {
@@ -747,4 +807,3 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
 
   return filledSummary;
 }
-
