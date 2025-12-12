@@ -275,28 +275,6 @@ function valueForRole(role, senderInfo, message) {
 }
 
 
-// ラベルなどから推測して値を埋める簡易フォールバック
-function valueFromLabelFallback(label, senderInfo, message) {
-  const text = (label || '').toLowerCase();
-  if (!text) return '';
-  const combinedPostalCode = [senderInfo.postalCode1 || '', senderInfo.postalCode2 || '']
-    .filter(Boolean)
-    .join('-');
-  const combinedPhone = [senderInfo.phone1 || '', senderInfo.phone2 || '', senderInfo.phone3 || '']
-    .filter(Boolean)
-    .join('-');
-  const combinedAddress = [
-    senderInfo.prefecture || '',
-    senderInfo.city || '',
-    senderInfo.town || '',
-    senderInfo.street || '',
-    senderInfo.building || '',
-  ]
-    .filter(Boolean)
-    .join('');
-}
-
-
 
 async function fillCheckbox(page, selectors, meta, filledSummary) {
   for (const frame of allFrames(page)) {
@@ -651,11 +629,6 @@ export async function fillContactForm(page, formSchema, senderInfo, message) {
       type !== 'checkbox'
     ) {
       value = multiValue.map((m) => m.value).join(' ・ ');
-    }
-
-    // それでも value が空なら、text/textarea 系はラベルからフォールバック
-    if (!value && type !== 'select' && type !== 'radio' && type !== 'checkbox') {
-      value = valueFromLabelFallback(label, senderInfo, message);
     }
 
     // まだ value が無くて text 系なら、このフィールドは諦める（other はサマリに残す）
