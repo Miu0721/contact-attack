@@ -270,6 +270,11 @@ function valueForRole(role, senderInfo, message) {
     return message || senderInfo.message || '';
   }
 
+  if (role === 'agreed') {
+    // 同意系はラベルが「同意」「確認済み」などになることが多いので、そのまま照合用文字列を返す
+    return senderInfo.agreed || '同意';
+  }
+
   // "other" や未知の role は空文字
   return '';
 }
@@ -283,6 +288,66 @@ async function fillCheckbox(page, selectors, meta, filledSummary) {
   for (const frame of allFrames(page)) {
     try {
       let checkboxLocator = null;
+
+      // --- ✨ 同意ボタン専用ロジック（最優先） --------------------------
+      if (meta.role === 'agreed') {
+        try {
+          const consentTarget = await frame.evaluate(() => {
+            const inputs = Array.from(
+              document.querySelectorAll('input[type="checkbox"], input[type="radio"]')
+            );
+            const norm = (s) => (s || '').trim().toLowerCase();
+            const hasConsent = (s) =>
+              ['同意', '確認', '了承', '送信内容', 'プライバシ', 'privacy', '個人情報', '規約', 'terms', 'agree', 'consent'].some(
+                (kw) => norm(s).includes(norm(kw))
+              );
+            const getLabelText = (input) => {
+              const id = input.id;
+              if (id) {
+                const lbl = document.querySelector(`label[for="${id}"]`);
+                if (lbl && lbl.textContent) return lbl.textContent.trim();
+              }
+              const parentLabel = input.closest('label');
+              if (parentLabel && parentLabel.textContent) return parentLabel.textContent.trim();
+              const parent = input.parentElement;
+              if (parent && parent.textContent) return parent.textContent.trim();
+              return '';
+            };
+
+            for (let i = 0; i < inputs.length; i += 1) {
+              const label = getLabelText(inputs[i]);
+              const value = inputs[i].value || '';
+              if (hasConsent(label) || hasConsent(value)) {
+                return { index: i, label: label || value || 'consent' };
+              }
+            }
+            return null;
+          });
+
+          if (consentTarget) {
+            const handles = await frame.$$(
+              'input[type="checkbox"], input[type="radio"]'
+            );
+            const handle = handles[consentTarget.index];
+            if (handle) {
+              await handle.check({ force: true });
+              const choiceLabel = consentTarget.label || 'consent';
+              console.log(
+                `☑️ 同意チェックを付けました (frame: ${frame.url()}) choice="${choiceLabel}"`
+              );
+              pushFilledSummary(filledSummary, meta, {
+                selector: 'input[type="checkbox"], input[type="radio"]',
+                value: choiceLabel,
+              });
+              return true;
+            }
+          }
+        } catch (e) {
+          console.warn('同意チェック処理でエラー:', e.message);
+        }
+        // 見つからなければ通常ロジックへフォールバック
+      }
+    
 
       // ① desiredLabel があるなら、まずラベルで探す
       if (desired) {
@@ -423,6 +488,28 @@ async function selectRadio(page, selectors, value, meta, filledSummary) {
                 options.find((o) => norm(o.value).includes(desired));
               if (partial) return partial;
             }
+
+            const matchConsent = (o) => {
+              const l = norm(o.label);
+              const v = norm(o.value);
+              return (
+                l.includes('同意') ||
+                l.includes('確認') ||
+                l.includes('了承') ||
+                l.includes('送信内容') ||
+                l.includes('プライバシ') ||
+                l.includes('privacy') ||
+                l.includes('個人情報') ||
+                l.includes('規約') ||
+                l.includes('terms') ||
+                v.includes('agree') ||
+                v.includes('consent') ||
+                v.includes('同意')
+              );
+            };
+
+            const consentHit = options.find((o) => matchConsent(o));
+            if (consentHit) return consentHit;
 
             return null;
           },
